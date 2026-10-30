@@ -1,0 +1,14 @@
+# Bundle patch layer: one host row for the knowledge base itself.
+#
+# The entry id doubles as the plugin's settings namespace. `enabled: false`
+# keeps the package installed while switching the tools off.
+#
+# dbPath 留空时落在 $DSH_HOME/kb/kb.db —— 与会话文件同域，迁移备份一起走。
+- insert:
+    - id: dsh-kb
+      name: dsh-kb
+      config:
+        enabled: true
+        dbPath: ""
+        maxResults: 6
+        promptSection: true
