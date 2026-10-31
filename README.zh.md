@@ -77,6 +77,14 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 > 顶部四个 tab（对话 / 记忆 / 知识库 / 工作流）与左侧八项侧栏属于 App 外壳，插件只占
 > `sidebar.panellist` 图标 + `main` 页面，做不出外壳级的改动。
 
+界面基线（改 UI 之后跑一遍对比）：
+
+``bash
+node tools/preview-canvas.mjs   # 用真库数据 + 同一份 CSS 渲染，headless Edge 截图 → docs/canvas.png
+``
+
+![画布](docs/canvas.png)
+
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/api/dsh-kb/stats` | 健康度 |
