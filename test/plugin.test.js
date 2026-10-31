@@ -319,3 +319,17 @@ test("kb_get 读不到时给出可执行提示", async () => {
 	assert.match(res.text, /没找到/);
 	ctx._dispose();
 });
+
+test("入口包装层：转发 apply，导入失败也照样导出契约", async () => {
+	const entry = await import("../lib/entry.js");
+	assert.equal(entry.name, "dsh-kb");
+	assert.deepEqual(entry.inject, ["tools", "systemPrompt"]);
+	assert.equal(typeof entry.apply, "function");
+	assert.equal(typeof entry.Config, "function");
+
+	const ctx = makeCtx();
+	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
+	entry.apply(ctx, { dbPath: path.join(dir, "kb.db"), bootFacts: 0 });
+	assert.equal(ctx._tools.length, 7, "包装层没把工具转发出来");
+	ctx._dispose();
+});
