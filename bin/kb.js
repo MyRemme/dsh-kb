@@ -8,11 +8,13 @@
 
 import { parseArgs } from "node:util";
 import process from "node:process";
+import path from "node:path";
 import { openDb, upsertFact, reindex, defaultDbPath } from "../lib/store.js";
 import { seg } from "../lib/segment.js";
 import { search, renderResults } from "../lib/search.js";
 import { ingest } from "../lib/ingest.js";
 import { digest, treeRows } from "../lib/digest.js";
+import { exportHtml } from "../lib/export.js";
 
 const C = {
 	dim: "\u001b[2m",
@@ -34,6 +36,7 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb show <id>                     看一条卡全文
   kb forget <id>                   标记失效（不删）
   kb reindex                       重建全文索引
+  kb export [--out FILE]           导出静态 HTML（双击可看）
 
 环境:
   DSH_HOME     默认 ~/.dsh
@@ -214,6 +217,16 @@ function main() {
 		case "reindex":
 			console.log("reindexed", reindex(db, seg));
 			return;
+		case "export": {
+			const { values } = parseArgs({
+				args: rest,
+				options: { out: { type: "string" }, "body-limit": { type: "string" } },
+			});
+			const out = values.out || path.join(path.dirname(defaultDbPath()), "preview.html");
+			const r = exportHtml(db, out, values["body-limit"] ? { bodyLimit: Number(values["body-limit"]) } : undefined);
+			console.log(JSON.stringify(r));
+			return;
+		}
 		default:
 			console.error(`unknown command: ${cmd}\n`);
 			console.log(HELP);

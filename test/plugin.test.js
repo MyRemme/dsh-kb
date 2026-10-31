@@ -30,9 +30,19 @@ const plugin = await import("../lib/index.js");
 function makeCtx() {
 	const tools = [];
 	const sections = [];
+	const routes = [];
 	const disposers = [];
 	return {
 		tools: { register: (def) => tools.push(def) },
+		webServer: {
+			register: (entry) => {
+				routes.push(entry);
+				return () => {
+					const at = routes.indexOf(entry);
+					if (at >= 0) routes.splice(at, 1);
+				};
+			},
+		},
 		systemPrompt: {
 			section: (s) => sections.push(s),
 			getSectionOrder: () => 100,
@@ -41,15 +51,39 @@ function makeCtx() {
 		// 测试内省用的把手
 		_tools: tools,
 		_sections: sections,
+		_routes: routes,
 		_dispose: () => disposers.forEach((d) => d?.()),
 	};
 }
 
 test("插件导出契约：name / inject / apply / Config", () => {
 	assert.equal(plugin.name, "dsh-kb");
-	assert.deepEqual([...plugin.inject].sort(), ["systemPrompt", "tools"]);
+	assert.deepEqual([...plugin.inject].sort(), ["systemPrompt", "tools", "webServer"]);
 	assert.equal(typeof plugin.apply, "function");
 	assert.equal(typeof plugin.Config, "function");
+});
+
+test("apply 注册 /api/dsh-kb/* 路由，卸载时全部清理", () => {
+	const ctx = makeCtx();
+	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
+	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
+	const paths = ctx._routes.map((r) => r.path).sort();
+	assert.deepEqual(paths, [
+		"/api/dsh-kb/card",
+		"/api/dsh-kb/cards",
+		"/api/dsh-kb/forget",
+		"/api/dsh-kb/graph",
+		"/api/dsh-kb/ingest",
+		"/api/dsh-kb/search",
+		"/api/dsh-kb/stats",
+		"/api/dsh-kb/tree",
+	]);
+	for (const r of ctx._routes) {
+		assert.equal(r.kind, "exact");
+		assert.equal(typeof r.handler, "function");
+	}
+	ctx._dispose();
+	assert.equal(ctx._routes.length, 0);
 });
 
 test("apply 注册五个工具并注入系统提示", () => {
