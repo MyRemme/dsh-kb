@@ -91,7 +91,7 @@ function raw(pathname, options = {}) {
 }
 
 test("路由表与端点清单一一对应", () => {
-	assert.equal(api.routes.length, 18);
+	assert.equal(api.routes.length, 19);
 	const declared = new Set(ENDPOINTS.map(([method, p]) => `${method} ${p}`));
 	for (const r of api.routes) {
 		const methods = [...declared].filter((entry) => entry.endsWith(` ${r.path}`));
@@ -99,7 +99,7 @@ test("路由表与端点清单一一对应", () => {
 	}
 	assert.deepEqual(
 		api.routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "models", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
 	);
 });
 

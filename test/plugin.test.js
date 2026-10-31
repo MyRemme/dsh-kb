@@ -142,15 +142,15 @@ test("kb_tree 与 kb_stats 能读到刚写的数据", async () => {
 	ctx._dispose();
 });
 
-test("ui 默认开：向 webServer 注册十八个端点，卸载时全部摘掉", () => {
+test("ui 默认开：向 webServer 注册十九个端点，卸载时全部摘掉", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	assert.deepEqual(ctx._injected, [["webServer"]]);
-	assert.equal(ctx._routes.length, 18);
+	assert.equal(ctx._routes.length, 19);
 	assert.deepEqual(
 		ctx._routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "models", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
 	);
 	assert.ok(ctx._routes.every((r) => r.kind === "exact" && typeof r.handler === "function"));
 	ctx._dispose();
@@ -395,4 +395,46 @@ test("卡片画布布局：块按骨架路径分组、卡片落在块内、块�
 	// 确定性：同样的输入两次布局一致（刷新不跳）
 	const again = client.__layout({ tree, facts, edges });
 	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), canvas.stars.map((s) => [s.id, s.x, s.y]));
+});
+
+test("星图布局：径向骨架（父枝→子枝）+ 星体散布 + 事实边", async () => {
+	const { readFileSync: read } = await import("node:fs");
+	const source = read(new URL("../lib/client.js", import.meta.url), "utf8");
+	let registration;
+	new Function("window", "document", source)({ __ModuleLoader__: { load: (r) => { registration = r; } } }, undefined);
+	const client = registration.factory((spec) => {
+		if (spec === "react") {
+			return { createElement: () => null, Fragment: "F", Component: class {}, useState: (v) => [v, () => {}], useEffect: () => {}, useCallback: (f) => f, useMemo: (f) => f(), useRef: () => ({ current: null }) };
+		}
+		throw new Error(`未声明模块：${spec}`);
+	});
+	assert.equal(typeof client.__galaxy, "function", "__galaxy 要导出给预览脚本与测试");
+
+	const tree = [
+		{ path: "topic", depth: 0, count: 0 },
+		{ path: "topic/dsh", depth: 1, count: 2 },
+		{ path: "topic/model", depth: 1, count: 1 },
+	];
+	const facts = [
+		{ id: "f_a", title: "A", kind: "fix", path: "topic/dsh", ts: 1 },
+		{ id: "f_b", title: "B", kind: "fact", path: "topic/dsh", ts: 2 },
+		{ id: "f_c", title: "C", kind: "decision", path: "topic/model", ts: 3 },
+	];
+	const g = client.__galaxy({ tree, facts, edges: [{ src: "f_a", dst: "f_c", rel: "related" }] });
+
+	assert.equal(g.stars.length, 3);
+	// 树状那一半：父子枝之间必须有连线，否则只是散落的圆点
+	const treeLinks = g.links.filter((l) => l.kind === "tree");
+	assert.equal(treeLinks.length, 2, "topic→dsh 与 topic→model 各一条");
+	// 星图那一半：每颗星一条归属线
+	assert.equal(g.links.filter((l) => l.kind === "spine").length, 3);
+	// 事实边
+	assert.equal(g.links.filter((l) => l.kind === "related").length, 1);
+	// 深层枝绕得更远
+	const root = g.hubs.find((h) => h.path === "topic");
+	const deep = g.hubs.find((h) => h.path === "topic/dsh");
+	assert.ok(deep.radius > root.radius, "深枝半径应更大");
+	// 确定性
+	const again = client.__galaxy({ tree, facts, edges: [] });
+	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), client.__galaxy({ tree, facts, edges: [] }).stars.map((s) => [s.id, s.x, s.y]));
 });
