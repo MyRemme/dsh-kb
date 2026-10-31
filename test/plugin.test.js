@@ -142,15 +142,15 @@ test("kb_tree 与 kb_stats 能读到刚写的数据", async () => {
 	ctx._dispose();
 });
 
-test("ui 默认开：向 webServer 注册十七个端点，卸载时全部摘掉", () => {
+test("ui 默认开：向 webServer 注册十八个端点，卸载时全部摘掉", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	assert.deepEqual(ctx._injected, [["webServer"]]);
-	assert.equal(ctx._routes.length, 17);
+	assert.equal(ctx._routes.length, 18);
 	assert.deepEqual(
 		ctx._routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
 	);
 	assert.ok(ctx._routes.every((r) => r.kind === "exact" && typeof r.handler === "function"));
 	ctx._dispose();

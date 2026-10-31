@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.1
+
+0.6.0 装好后用户反馈"面板只有框架、没有实际内容"。这一版把**看不见的失败**变成看得见的：
+
+- **前端错误上报**：`POST /api/dsh-kb/frontlog`（第 18 个端点）写 `$DSH_HOME/kb/front.log`。
+  client 里加了 `window.onerror` / `unhandledrejection` / 所有 API 失败 / React 渲染兜底
+  四处上报 —— 面板白屏时最麻烦的不是报错，是没人看得见报错，浏览器控制台不会有人去翻。
+- **渲染兜底 `Boundary`**：组件树里任何一层抛错都显示成一行红条 + "详情已写入 front.log"，
+  而不是整页空白。`React.Component` 不可用时降级成透明包装，至少不连坐。
+- **高度兜底**：`.dkb-stage` 给 `min-height:280px`、`.dkb-root` 加 `overflow:hidden`。
+  之前整条高度链依赖父容器给出确定高度，父容器不给就会塌成"只有工具栏和 chips"。
+- **去掉 `React.Fragment`**：改用 `.dkb-drawer-inner` 这一层真实 div，少一个对 React
+  完整度的假设。
+- **顶栏数字兼作连通性指示器**：拿不到 stats 时显示"连不上后端"，拿到时显示
+  `1206 卡 · 696 边` —— 一眼区分"前端没连上"和"连上了但画不出来"。
+- `injectStyle()` 提前到 `apply()`，避免首帧无样式导致的尺寸误判。
+
+测试 114 → 115（新增 frontlog 端点落盘断言）。
+
 ## 0.6.0
 
 语义模型（L2）：把"一堆事实卡"变成"有类型、有关系"的知识图谱。

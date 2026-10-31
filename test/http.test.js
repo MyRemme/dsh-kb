@@ -12,7 +12,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -91,7 +91,7 @@ function raw(pathname, options = {}) {
 }
 
 test("路由表与端点清单一一对应", () => {
-	assert.equal(api.routes.length, 17);
+	assert.equal(api.routes.length, 18);
 	const declared = new Set(ENDPOINTS.map(([method, p]) => `${method} ${p}`));
 	for (const r of api.routes) {
 		const methods = [...declared].filter((entry) => entry.endsWith(` ${r.path}`));
@@ -99,7 +99,7 @@ test("路由表与端点清单一一对应", () => {
 	}
 	assert.deepEqual(
 		api.routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
 	);
 });
 
@@ -338,6 +338,23 @@ test("POST /sweep 降级过期快照卡", async () => {
 	assert.equal(res.status, 200);
 	assert.ok(res.body.data.staled >= 1);
 	assert.equal(db.prepare("SELECT status FROM fact WHERE title=?").get("很旧的待办").status, "doubtful");
+});
+
+test("POST /frontlog 把前端错误落成一行日志", async () => {
+	const res = await post(`${API_PREFIX}/frontlog`, {
+		level: "error",
+		message: "面板渲染失败：x is not a function",
+		stack: "TypeError: x is not a function\n    at MemoryPage",
+		extra: { where: "client.js:1" },
+	});
+	assert.equal(res.status, 200);
+	assert.equal(res.body.data.logged, true);
+	const logFile = path.join(path.dirname(file), "front.log");
+	assert.ok(existsSync(logFile), "front.log 应该建出来");
+	const text = readFileSync(logFile, "utf8");
+	assert.ok(text.includes("面板渲染失败"), "消息要落盘");
+	assert.ok(text.includes("client.js:1"), "extra 要落盘");
+	assert.ok(text.includes("[error]"), "级别要标出来");
 });
 
 test("POST /mirror 落地目录，二次调用全部 unchanged", async () => {
