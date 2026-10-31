@@ -12,15 +12,19 @@
 html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
 </style><style>
 .dkb-root{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:14px;line-height:1.6;position:relative;}
-.dkb-bar{display:flex;align-items:center;gap:6px;padding:0 20px;height:56px;flex:0 0 auto;border-bottom:1px solid var(--dsw-alias-border-l2);}
-.dkb-search{flex:1 1 auto;min-width:120px;height:32px;padding:0 12px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none;}
+/* 所有控件共用一套高度与间距 —— 之前搜索框 32px、按钮 28px、chip 26px，
+   三种高度混在一行里，怎么调都像"对不上位置"。 */
+.dkb-root{--dkb-h:30px;--dkb-gap:8px;}
+.dkb-bar{display:flex;align-items:center;gap:var(--dkb-gap);padding:0 20px;height:56px;flex:0 0 auto;border-bottom:1px solid var(--dsw-alias-border-l2);}
+.dkb-search{flex:1 1 auto;min-width:140px;max-width:560px;height:var(--dkb-h);padding:0 12px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none;box-sizing:border-box;}
+.dkb-search:focus{border-color:var(--dsw-alias-state-business-primary);}
 .dkb-search::placeholder{color:var(--dsw-alias-label-caption);}
 .dkb-search:focus{border-color:var(--dsw-alias-state-business-primary);}
-.dkb-btn{height:28px;padding:0 10px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:18px;cursor:pointer;white-space:nowrap;}
+.dkb-btn{display:inline-flex;align-items:center;justify-content:center;height:var(--dkb-h);padding:0 12px;border:1px solid transparent;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;cursor:pointer;white-space:nowrap;box-sizing:border-box;transition:background 120ms ease,border-color 120ms ease,color 120ms ease;}
 .dkb-btn:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);}
-.dkb-btn[data-active="1"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}
+.dkb-btn[data-active="1"]{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l3);color:var(--dsw-alias-state-business-primary);font-weight:600;}
 .dkb-btn:disabled{opacity:.4;cursor:not-allowed;}
-.dkb-stat{font-size:12px;color:var(--dsw-alias-label-caption);white-space:nowrap;font-variant-numeric:tabular-nums;}
+.dkb-stat{margin-left:auto;font-size:12px;color:var(--dsw-alias-label-caption);white-space:nowrap;font-variant-numeric:tabular-nums;}
 .dkb-cols{display:flex;flex:1 1 auto;min-height:0;}
 .dkb-col{border-right:1px solid var(--dsw-alias-border-l2);overflow:auto;min-height:0;scrollbar-width:thin;}
 .dkb-tree{flex:0 0 216px;padding:8px;}
@@ -84,7 +88,14 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
 /* ---- 星图：径向骨架 + 星体 ---- */
 .dkb-star-svg{display:block;width:100%;height:100%;cursor:grab;}
 .dkb-vp[data-drag="1"] .dkb-star-svg{cursor:grabbing;}
-.dkb-star{cursor:pointer;transition:fill-opacity 120ms ease;}
+.dkb-star{cursor:pointer;transition:fill-opacity 140ms ease,r 140ms ease;}
+.dkb-starg:hover .dkb-star{fill-opacity:1;r:calc(var(--r, 3px) + 1px);}
+.dkb-star-hit{cursor:pointer;}
+.dkb-star-hit:hover + .dkb-star{fill-opacity:1;}
+.dkb-star-ring{animation:dkb-pulse 1.4s ease-in-out infinite;}
+@keyframes dkb-pulse{0%,100%{stroke-opacity:.35;}50%{stroke-opacity:1;}}
+.dkb-star-svg .dkb-starg{animation:dkb-fade .35s ease-out both;}
+@keyframes dkb-fade{from{opacity:0;}to{opacity:1;}}
 .dkb-star:hover{fill-opacity:1;}
 .dkb-hublabel{fill:var(--dsw-alias-label-tertiary);font-size:11px;pointer-events:none;user-select:none;}
 .dkb-blocklabel{position:absolute;font-size:11px;line-height:16px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-caption);pointer-events:none;user-select:none;}
@@ -93,8 +104,12 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
 .dkb-toolbar{position:absolute;top:10px;right:12px;display:flex;align-items:center;gap:6px;z-index:3;}
 .dkb-zoombox{display:flex;align-items:center;gap:2px;height:28px;padding:0 4px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);}
 .dkb-zoombox .v{min-width:42px;text-align:center;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;}
-.dkb-chipbar{display:flex;align-items:center;gap:4px;padding:0 20px 0;height:40px;flex:0 0 auto;border-bottom:1px solid var(--dsw-alias-border-l2);overflow-x:auto;scrollbar-width:none;}
-.dkb-chip{height:26px;padding:0 11px;border-radius:13px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap;}
+.dkb-chipbar{display:flex;align-items:center;gap:6px;padding:0 20px;height:44px;flex:0 0 auto;border-bottom:1px solid var(--dsw-alias-border-l2);overflow-x:auto;scrollbar-width:none;}
+.dkb-chipbar>.dkb-chipspacer{flex:1 1 auto;min-width:8px;}
+.dkb-filters{display:flex;align-items:center;gap:var(--dkb-gap);flex:0 0 auto;}
+.dkb-select{height:var(--dkb-h);padding:0 8px;border-radius:var(--dsw-radius-sm);border:1px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;box-sizing:border-box;}
+.dkb-select:focus{outline:none;border-color:var(--dsw-alias-state-business-primary);}
+.dkb-chip{display:inline-flex;align-items:center;height:var(--dkb-h);padding:0 12px;border-radius:15px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1;cursor:pointer;white-space:nowrap;box-sizing:border-box;transition:background 120ms ease,border-color 120ms ease,color 120ms ease;}
 .dkb-chip:hover{background:var(--dsw-alias-interactive-bg-hover);}
 .dkb-chip[data-active="1"]{background:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary-foreground);}
 
@@ -121,7 +136,20 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
 /* ---- 底部时间线 ---- */
 .dkb-timeline{flex:0 0 auto;border-top:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);}
 .dkb-tlhead{display:flex;align-items:center;gap:4px;height:38px;padding:0 16px;}
-.dkb-tlbody{display:flex;gap:10px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:thin;}
+.dkb-tlhead .dkb-tlcount{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-caption);font-variant-numeric:tabular-nums;}
+.dkb-tlnav{display:flex;gap:4px;margin-left:8px;}
+.dkb-tlnav .dkb-btn{width:24px;height:24px;padding:0;font-size:14px;line-height:1;}
+.dkb-tlnav .dkb-btn:disabled{opacity:.35;cursor:default;}
+.dkb-tlwrap{position:relative;}
+.dkb-tlfade{position:absolute;top:0;bottom:12px;width:36px;pointer-events:none;z-index:1;}
+.dkb-tlfade.l{left:0;background:linear-gradient(to right,var(--dsw-alias-bg-base),transparent);}
+.dkb-tlfade.r{right:0;background:linear-gradient(to left,var(--dsw-alias-bg-base),transparent);}
+.dkb-tlbody{display:flex;gap:10px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:thin;cursor:grab;user-select:none;-webkit-user-select:none;}
+.dkb-tlbody[data-drag="1"]{cursor:grabbing;scroll-behavior:auto;}
+.dkb-tlbody::-webkit-scrollbar{height:8px;}
+.dkb-tlbody::-webkit-scrollbar-track{background:transparent;}
+.dkb-tlbody::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l3);border-radius:4px;}
+.dkb-tlbody::-webkit-scrollbar-thumb:hover{background:var(--dsw-alias-border-l4);}
 .dkb-tlcard{flex:0 0 240px;padding:9px 11px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);cursor:pointer;overflow:hidden;}
 .dkb-tlcard:hover{border-color:var(--dsw-alias-border-l4);}
 .dkb-tlcard .h{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dsw-alias-label-caption);}
@@ -131,13 +159,21 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
 </style></head><body>
 <div class="dkb-root">
   <div class="dkb-bar"><input class="dkb-search" placeholder="搜索记忆节点、对话、文档或标签…" value="">
-    <button class="dkb-btn">图谱</button><button class="dkb-btn">列表</button>
-    <button class="dkb-btn">直接提取</button><button class="dkb-btn" data-active="0">模型提炼</button><button class="dkb-btn">新建</button>
-    <span class="dkb-stat">320 卡 · 400 边</span></div>
+    <button class="dkb-btn" data-active="1">图谱</button><button class="dkb-btn">列表</button>
+    <button class="dkb-btn">直接提取</button><button class="dkb-btn">模型提炼</button><button class="dkb-btn">新建</button>
+    <span class="dkb-stat">320 卡 · 400 边 · 67 实体</span></div>
   <div class="dkb-chipbar">
-    <button class="dkb-chip" data-active="1">全部</button><button class="dkb-chip">记忆</button>
-    <button class="dkb-chip">文档</button><button class="dkb-chip">对话</button>
-    <button class="dkb-chip">项目</button><button class="dkb-chip">任务</button></div>
+    <button class="dkb-chip" data-active="1">全部</button><button class="dkb-chip">记忆 220</button>
+    <button class="dkb-chip">文档 68</button><button class="dkb-chip">对话 735</button>
+    <button class="dkb-chip">项目 90</button><button class="dkb-chip">任务 105</button>
+    <div class="dkb-chipspacer"></div>
+    <div class="dkb-filters">
+      <select class="dkb-select"><option>全部类型</option></select>
+      <select class="dkb-select"><option>不限时间</option></select>
+      <select class="dkb-select"><option>在用</option></select>
+      <select class="dkb-select"><option>最新在前</option></select>
+    </div>
+  </div>
   <div class="dkb-stage">
     <div class="dkb-vp">
       <svg class="dkb-star-svg" viewBox="0 0 720 720" preserveAspectRatio="xMidYMid meet">

@@ -99,13 +99,21 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
 </style><style>${CSS}</style></head><body>
 <div class="dkb-root">
   <div class="dkb-bar"><input class="dkb-search" placeholder="搜索记忆节点、对话、文档或标签…" value="">
-    <button class="dkb-btn">图谱</button><button class="dkb-btn">列表</button>
-    <button class="dkb-btn">直接提取</button><button class="dkb-btn" data-active="0">模型提炼</button><button class="dkb-btn">新建</button>
-    <span class="dkb-stat">${facts.length} 卡 · ${edges.length} 边</span></div>
+    <button class="dkb-btn" data-active="1">图谱</button><button class="dkb-btn">列表</button>
+    <button class="dkb-btn">直接提取</button><button class="dkb-btn">模型提炼</button><button class="dkb-btn">新建</button>
+    <span class="dkb-stat">${facts.length} 卡 · ${edges.length} 边 · 67 实体</span></div>
   <div class="dkb-chipbar">
-    <button class="dkb-chip" data-active="1">全部</button><button class="dkb-chip">记忆</button>
-    <button class="dkb-chip">文档</button><button class="dkb-chip">对话</button>
-    <button class="dkb-chip">项目</button><button class="dkb-chip">任务</button></div>
+    <button class="dkb-chip" data-active="1">全部</button><button class="dkb-chip">记忆 220</button>
+    <button class="dkb-chip">文档 68</button><button class="dkb-chip">对话 735</button>
+    <button class="dkb-chip">项目 90</button><button class="dkb-chip">任务 105</button>
+    <div class="dkb-chipspacer"></div>
+    <div class="dkb-filters">
+      <select class="dkb-select"><option>全部类型</option></select>
+      <select class="dkb-select"><option>不限时间</option></select>
+      <select class="dkb-select"><option>在用</option></select>
+      <select class="dkb-select"><option>最新在前</option></select>
+    </div>
+  </div>
   <div class="dkb-stage">
     <div class="dkb-vp">
       <svg class="dkb-star-svg" viewBox="0 0 ${SIZE} ${SIZE}" preserveAspectRatio="xMidYMid meet">
