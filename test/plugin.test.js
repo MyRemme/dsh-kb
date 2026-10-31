@@ -334,14 +334,14 @@ test("入口包装层：转发 apply，导入失败也照样导出契约", async
 	ctx._dispose();
 });
 
-test("星图布局：径向树骨架 + 确定性散布 + 结构线", async () => {
+test("卡片画布布局：块按骨架路径分组、卡片落在块内、块不重叠、确定性", async () => {
 	const { readFileSync } = await import("node:fs");
 	const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
 	let registration;
 	new Function("window", "document", source)({ __ModuleLoader__: { load: (r) => { registration = r; } } }, undefined);
 	const client = registration.factory((spec) => {
 		if (spec === "react") {
-			return { createElement: () => null, useState: () => [], useEffect: () => {}, useCallback: (f) => f, useMemo: (f) => f(), useRef: () => ({ current: null }) };
+			return { createElement: () => null, useState: () => [], useEffect: () => {}, useCallback: (f) => f, useMemo: (f) => f(), useRef: () => ({ current: null }), Fragment: "Fragment" };
 		}
 		throw new Error(`未声明模块：${spec}`);
 	});
@@ -353,25 +353,46 @@ test("星图布局：径向树骨架 + 确定性散布 + 结构线", async () =>
 		{ path: "topic/model", depth: 1, count: 1 },
 	];
 	const facts = [
-		{ id: "f_a", title: "A", kind: "fix", path: "topic/dsh", confidence: 0.9, ts: 1 },
+		{ id: "f_a", title: "A", kind: "fix", path: "topic/dsh", confidence: 0.9, ts: 1, tags: ["t1"] },
 		{ id: "f_b", title: "B", kind: "fact", path: "topic/dsh", confidence: 0.6, ts: 2 },
 		{ id: "f_c", title: "C", kind: "decision", path: "topic/model", confidence: 0.8, ts: 3 },
 	];
 	const edges = [{ src: "f_a", dst: "f_b", rel: "related" }];
 
-	const galaxy = client.__layout({ tree, facts, edges, size: 720 });
-	assert.equal(galaxy.hubs.length, 3);
-	assert.equal(galaxy.stars.length, 3);
-	// 每颗星一条结构线 + 一条事实边
-	assert.equal(galaxy.links.filter((l) => l.kind === "spine").length, 3);
-	assert.equal(galaxy.links.filter((l) => l.kind === "related").length, 1);
+	const canvas = client.__layout({ tree, facts, edges });
+	// 只有装了卡的路径才成块：topic 本身 0 张卡，不画空块
+	assert.equal(canvas.hubs.length, 2);
+	assert.equal(canvas.stars.length, 3);
+	// 画布上只留卡片之间的真实关系：不再画"块 → 卡"的归属线（块的包围关系已表达归属）
+	assert.equal(canvas.links.filter((l) => l.kind === "spine").length, 0);
+	assert.equal(canvas.links.length, 1);
+	assert.equal(canvas.links.filter((l) => l.kind === "related").length, 1);
+	// 事实边带中文标签，供画布上那圈胶囊用
+	const labelled = canvas.links.filter((l) => l.tagged === true);
+	assert.equal(labelled.length, 1);
+	assert.equal(labelled[0].label, "关联");
 
-	// 深层枝绕得更远：dsh/model 的半径应大于 topic
-	const topic = galaxy.hubs.find((h) => h.path === "topic");
-	const dsh = galaxy.hubs.find((h) => h.path === "topic/dsh");
-	assert.ok(dsh.radius > topic.radius);
+	// 卡片必须完整落在所属块内，否则视觉上会串枝
+	for (const star of canvas.stars) {
+		const hub = canvas.hubs.find((item) => item.path === star.home);
+		assert.ok(hub, `卡片 ${star.id} 的 home 没有对应块`);
+		assert.ok(star.x >= hub.x && star.y >= hub.y, `卡片 ${star.id} 越出块左上`);
+		assert.ok(star.x + star.w <= hub.x + hub.w && star.y + star.h <= hub.y + hub.h, `卡片 ${star.id} 越出块右下`);
+	}
+
+	// 块之间不重叠
+	for (let a = 0; a < canvas.hubs.length; a += 1) {
+		for (let b = a + 1; b < canvas.hubs.length; b += 1) {
+			const one = canvas.hubs[a];
+			const two = canvas.hubs[b];
+			const hit = one.x < two.x + two.w && two.x < one.x + one.w && one.y < two.y + two.h && two.y < one.y + one.h;
+			assert.equal(hit, false, `${one.path} 与 ${two.path} 的块重叠了`);
+		}
+	}
+
+	assert.ok(canvas.width > 0 && canvas.height > 0, "画布尺寸必须是正的");
 
 	// 确定性：同样的输入两次布局一致（刷新不跳）
-	const again = client.__layout({ tree, facts, edges, size: 720 });
-	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), galaxy.stars.map((s) => [s.id, s.x, s.y]));
+	const again = client.__layout({ tree, facts, edges });
+	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), canvas.stars.map((s) => [s.id, s.x, s.y]));
 });
