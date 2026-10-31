@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.6.6
+
+把第二轮审查里"看了但没动"的风险全部修掉，并补一组 `test/hardening.test.js` 钉住。
+
+**1. 500 不再外泄内部细节**
+
+`handle` 的兜底分支原来把 `error.message` 直出（截 300 字），里面可能有 SQL 片段、
+绝对路径、文件句柄信息。现在客户端只拿 `服务端错误（详情见宿主日志）`，
+详情走 `console.error` 进宿主日志。4xx 的 `HttpError` 不受影响 —— 那些 message
+是我们自己写的给人看的文案。
+
+**2. `0.0.0.0` 从 LOOPBACK 集合移除**
+
+它不是"本机"的同义词。浏览器几乎不会拿它当 Origin，留着只是白送一个可用的取值。
+
+**3. 镜像目录必须落在 `$DSH_HOME` 的子目录**
+
+之前 `rel === ""`（root 本身）是放行的，意味着一次请求就能把上千个 md 直接铺到
+`$DSH_HOME` 根目录，跟 `profiles/` `sessions/` 混在一起。现在要求子目录。
+
+**4. `/frontlog` 加去重节流**
+
+前端一个渲染死循环可以每帧发一次上报。按 `level|message 前 200 字` 做 key，
+5 秒窗口内重复只回 `{logged:false, throttled:true}`，不落盘；map 超 300 条时清过期项。
+
+**5. 重操作互斥**
+
+`ingest` / `distill` / `migrate` / `mirror` / `unmirror` / `sweep` 共用一把互斥，
+第二次并发请求直接 409 `busy`。这些会扫全库或整个会话目录，并发跑起来既拖慢彼此，
+也可能撞上同一个库写。fail-fast 比排队诚实。
+
+**6. `/link` 的 note 限 500 字**
+
+边上的备注没人读长文；8 MB 的 body 上限不该变成单条边的容量。
+
+**审查里确认不用改的**
+
+- `updateFact` 的正文截断**已经存在**（6000 字 + `…[truncated]`），和 `upsertFact` 一致。
+- SQL 全部走 `?` 占位符；唯一的 `LIMIT ${n}` 由 `Number.isFinite` 把关，无注入面。
+- 18 个路由都是 `exact`，`matchRoute` 的 prefix 分支目前是死代码 —— 保留它有测试覆盖，
+  将来真要加前缀路由时不用重写。
+
+测试 119 → 124。
+
 ## 0.6.5
 
 第二轮审查：把"提炼"这条链路补成闭环。
