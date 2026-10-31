@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.2
+
+真因找到：**面板一直在正常工作，只是它把所有查询都发成了 `path=undefined`。**
+
+`new URLSearchParams({ path: undefined })` 会产出**字符串 "undefined"**，后端把它当成路径前缀去
+`LIKE 'undefined%'`，于是匹配 0 条。表现恰好是"树有数据、chips 有数字、列表和画布全空"——
+因为 `/tree` 和 `/stats` 不带这个参数，而 `/facts` 与 `/graph` 带。
+
+实测对照（真库 1206 张卡）：
+
+```
+/facts?limit=3&status=active                → total=1206  ✓
+/facts?limit=3&status=active&path=undefined → total=0     ✗  ← 面板实际发的
+/graph?limit=5                              → nodes=5     ✓
+/graph?limit=5&path=undefined               → nodes=0     ✗
+```
+
+**修法（两边都堵）**
+
+- 前端：新增 `buildQuery()`，过滤 `undefined` / `null` / 空白串；`call()` 一律走它。
+  导出成 `__query` 供测试钉住。
+- 后端：新增 `cleanParam()`，把 `"undefined"` / `"null"` / 空串当成"没给"，
+  `/facts` 与 `/graph` 的四个筛选参数全过一遍。前端万一再发垃圾，也不至于整页空表。
+
+测试 115 → 116（`GET /facts 把 path=undefined 当成没给`）。
+
+**这也解释了 0.6.1 的 front.log 为什么没有 render/api 错误**：请求全部成功（200），
+只是返回了空结果集。真正该被记下来的是"带 undefined 的查询串"，而不是"请求失败"。
+
 ## 0.6.1
 
 0.6.0 装好后用户反馈"面板只有框架、没有实际内容"。这一版把**看不见的失败**变成看得见的：

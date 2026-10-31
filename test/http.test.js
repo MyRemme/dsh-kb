@@ -357,6 +357,18 @@ test("POST /frontlog 把前端错误落成一行日志", async () => {
 	assert.ok(text.includes("[error]"), "级别要标出来");
 });
 
+test("GET /facts 把 path=undefined 当成没给（前端曾经真的这么发过）", async () => {
+	await post(`${API_PREFIX}/add`, { title: "cleanParam 回归卡", body: "正文", path: "topic/dsh" });
+	const clean = await get(`${API_PREFIX}/facts?limit=5`);
+	const junk = await get(`${API_PREFIX}/facts?limit=5&path=undefined`);
+	assert.equal(junk.status, 200);
+	assert.equal(junk.body.data.total, clean.body.data.total, "path=undefined 不该把结果筛没");
+	assert.ok(junk.body.data.total > 0, "库里明明有卡");
+	const junkGraph = await get(`${API_PREFIX}/graph?limit=5&path=undefined`);
+	assert.equal(junkGraph.body.data.nodes.length, clean.body.data.items.length > 0 ? junkGraph.body.data.nodes.length : 0);
+	assert.ok(junkGraph.body.data.nodes.length > 0, "path=undefined 不该让画布空掉");
+});
+
 test("POST /mirror 落地目录，二次调用全部 unchanged", async () => {
 	const mirrorDir = path.join(dir, "mirror-http");
 	await post(`${API_PREFIX}/add`, { title: "镜像端点卡", body: "正文", path: "topic/dsh", kind: "fact" });
