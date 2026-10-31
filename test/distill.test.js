@@ -127,9 +127,25 @@ test("distillWithModel 原料为空时不调模型", async () => {
 });
 
 test("exportMaterial：无模型通道时的出料包", () => {
+	// 前面的用例已经给 seed() 那批建过 derived_from，这里补一段"没被提炼过"的原料
+	upsertFact(db, { title: "[会话] 出料专用原料", body: "用户原话：这段还没被提炼过。", kind: "episode", path: "topic/dsh", ts: Date.now() }, seg);
 	const pack = exportMaterial(db, { limit: 2 });
 	assert.ok(pack.material >= 1);
 	assert.match(pack.prompt.user, /原料/);
+});
+
+test("collectMaterial 默认排除已提炼过的原料（derived_from 的 dst）", () => {
+	seed();
+	const target = db.prepare("SELECT id FROM fact WHERE title=?").get("[意图] 修面板");
+	assert.ok(target, "seed 应该建出这张原料卡");
+	const consumer = db.prepare("SELECT id FROM fact WHERE title=?").get("已经有结论的卡");
+	addEdge(db, consumer.id, target.id, "derived_from", 1, "测试用");
+
+	const fresh = collectMaterial(db, { limit: 50 }).map((m) => m.title);
+	assert.ok(!fresh.includes("[意图] 修面板"), "被 derived_from 指向的原料不该再出");
+
+	const all = collectMaterial(db, { limit: 50, includeSpent: true }).map((m) => m.title);
+	assert.ok(all.includes("[意图] 修面板"), "includeSpent 时才回来");
 });
 
 test("resolveModel：没有 llm 服务或没有模型时返回 undefined", async () => {

@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.6.5
+
+第二轮审查：把"提炼"这条链路补成闭环。
+
+**发现 1：distill 会反复抽同一批原料**
+
+`collectMaterial` 按时间倒序取最新 N 段，**不排除已经提炼过的**。实测跑
+`kb distill --path project/code` 抽到的 6 段全是刚写过卡的会话 —— 产出的只能是重复。
+
+修法：`f.id NOT IN (SELECT dst FROM edge WHERE rel='derived_from')`，
+留 `includeSpent: true` 作逃生口。
+
+**发现 2：`kb_add` 根本不记录来源**
+
+排除逻辑上了也没用 —— 结论卡写进库时没有 `derived_from` 边，distill 无从判断
+"这段原料被提炼过"。真库上重跑一次 distill，原料一模一样。
+
+修法：`kb_add` 加 `from` 参数（逗号分隔的来源卡 id），写入后自动建 `derived_from`。
+`kb_distill` 的出料提示里也写明"每条都要带 from"，否则下一次还会喂同一批。
+
+**发现 3：`safeDir` 装了但没生效**
+
+用真机实测（`POST /mirror` 传 `C:/Windows/Temp/evil`、`.dsh/../.ssh`、`.dshx` 前缀）
+**全部返回 200** —— 因为宿主跑的还是 0.6.2。对着源码单独验，越界全部 403。
+教训：验证安全修复时，先确认被验的是新代码。
+
+**审查里看了但没动的（都记录在案）**
+
+- `handle` 的 500 分支把 `error.message` 直出给客户端，可能泄漏 SQL 片段或绝对路径。
+  本机工具，风险低。
+- `LOOPBACK` 集合含 `0.0.0.0`，作为 Origin 极少见。
+- 所有 18 个路由都是 `exact`，`matchRoute` 的 prefix 分支实际是死代码（测试在用）。
+- SQL 全部走 `?` 占位符，唯一的 `LIMIT ${n}` 由 `Number.isFinite` 把关；无注入面。
+
+测试 118 → 119（`collectMaterial 默认排除已提炼过的原料`）。
+
 ## 0.6.4
 
 检索排序改两段式：**结论卡先占位，原话不足时补充。**
