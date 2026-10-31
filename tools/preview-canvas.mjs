@@ -45,6 +45,7 @@ const client = registration.factory((spec) => {
 
 // ---- 真库数据；没有库就用一份样例，保证脚本离线可跑 ----
 let tree = [];
+let groupCounts = {};
 let facts = [];
 let edges = [];
 const dbFile = process.env.DSH_KB_PATH || path.join(process.env.DSH_HOME || path.join(process.env.USERPROFILE ?? "", ".dsh"), "kb", "kb.db");
@@ -58,6 +59,7 @@ if (existsSync(dbFile)) {
 		.all()
 		.map((row) => ({ id: row.id, title: row.title, kind: row.kind, path: row.path, ts: Number(row.ts), tags: JSON.parse(row.tags ?? "[]").slice(0, 3), confidence: Number(row.confidence ?? 0.6) }));
 	edges = db.prepare("SELECT src,dst,rel FROM edge LIMIT 400").all();
+	groupCounts = Object.fromEntries(db.prepare("SELECT grp, COUNT(*) AS n FROM fact GROUP BY grp").all().map((r) => [r.grp, r.n]));
 	db.close();
 	console.log("real db:", dbFile);
 } else {
@@ -101,8 +103,9 @@ const GROUPS = [
 ];
 const groupOf = (fact) => GROUPS.find((g) => g.id !== "all" && g.test(fact.kind, fact.path))?.id ?? "memory";
 
-const counts = {};
-for (const fact of facts) counts[groupOf(fact)] = (counts[groupOf(fact)] ?? 0) + 1;
+// 优先用库里的全量分布；没有库（样例数据）时才按画布上的卡数算
+const counts = Object.keys(groupCounts).length > 0 ? groupCounts : {};
+if (Object.keys(counts).length === 0) for (const fact of facts) counts[groupOf(fact)] = (counts[groupOf(fact)] ?? 0) + 1;
 
 const edgeSvg = layout.links
 	.map((link) => {

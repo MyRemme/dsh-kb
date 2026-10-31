@@ -91,7 +91,7 @@ function raw(pathname, options = {}) {
 }
 
 test("路由表与端点清单一一对应", () => {
-	assert.equal(api.routes.length, 15);
+	assert.equal(api.routes.length, 17);
 	const declared = new Set(ENDPOINTS.map(([method, p]) => `${method} ${p}`));
 	for (const r of api.routes) {
 		const methods = [...declared].filter((entry) => entry.endsWith(` ${r.path}`));
@@ -99,7 +99,7 @@ test("路由表与端点清单一一对应", () => {
 	}
 	assert.deepEqual(
 		api.routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "link", "migrate", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
 	);
 });
 
@@ -109,7 +109,7 @@ test("GET /stats 返回真实计数", async () => {
 	assert.equal(body.ok, true);
 	assert.equal(body.data.db, file);
 	assert.equal(typeof body.data.facts, "number");
-	assert.deepEqual(Object.keys(body.data).sort(), ["active", "db", "edges", "facts", "kinds", "mentions", "nodes", "paths", "sessions", "stale", "versions"].sort());
+	assert.deepEqual(Object.keys(body.data).sort(), ["active", "db", "edges", "facts", "groups", "kinds", "mentions", "nodes", "paths", "rels", "sessions", "stale", "versions"].sort());
 });
 
 test("POST /add 写卡，GET /facts 立刻能看到", async () => {

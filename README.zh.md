@@ -43,7 +43,7 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 
 ## 用
 
-给模型的九个工具：
+给模型的十个工具：
 
 | 工具 | 作用 |
 |---|---|
@@ -56,10 +56,11 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | `kb_ingest` | 直接提取：增量吸收 + 重算摘要 + 降级过期快照（幂等，零模型） |
 | `kb_distill` | 模型提炼：原料 → 结论卡（带 `derived_from` 边）；无模型通道时退回出料 |
 | `kb_mirror` | 投影成 Markdown 目录树（可 git / 可手改），或把目录改动写回库 |
+| `kb_link` | 给两张卡建一条语义关系边（关系名走白名单，拼错会被拒） |
 
 开场注入：每轮组装系统提示时现算最近 N 张卡（`bootFacts`，默认 6），所以上一轮写下的东西下一轮就在上下文里。
 
-浏览器里的侧边栏「记忆」面板，数据来自十五个端点：
+浏览器里的侧边栏「记忆」面板，数据来自十七个端点：
 
 **界面**（0.5.0 重排）
 
@@ -102,6 +103,8 @@ node tools/preview-canvas.mjs   # 用真库数据 + 同一份 CSS 渲染，headl
 | POST | `/api/dsh-kb/distill` | 模型提炼（无通道时返回原料 + 提示词） |
 | POST | `/api/dsh-kb/mirror` | 投影成 Markdown 目录树（`dir` / `dryRun`） |
 | POST | `/api/dsh-kb/unmirror` | 把镜像里的改动写回库（`force` / `dryRun`） |
+| POST | `/api/dsh-kb/link` | 建一条语义关系边（关系名白名单） |
+| POST | `/api/dsh-kb/migrate` | 重算派生数据：分组回填 / 老边改名（幂等） |
 
 端点只校验来源（同源或回环，非 GET 要求严格同源）：本机进程本来就能读 `kb.db`，加 cookie 认证挡不住谁。**若经 lan-pair 之类暴露到内网，必须先换成宿主会话凭证校验。**
 
@@ -143,6 +146,35 @@ npx dsh-kb import --md [--dir D]        # 把目录里的改动写回库（默�
 | 导入只认**比库里新**的文件，`--force` 才全灌 | 重新 clone 一份旧镜像不该把库回滚 |
 
 正文换行统一折成 LF（库里原字节不动）——不然 CRLF 卡一往返就被判成「被改过」。
+
+## 语义模型
+
+两条轴，分工不同：
+
+| 轴 | 取值 | 回答什么 |
+|---|---|---|
+| `kind` | fact / decision / fix / pref / howto / concept / intent / episode / segment / todo / state / artifact | 这条东西**是什么形态** |
+| `grp` | memory / doc / talk / project / task | 它该出现在**哪个抽屉**里（派生，落库供索引） |
+
+关系名是白名单，九种：
+
+```
+包含 contains      归属：项目包含文档
+关联 related       弱关联：两件事互相参照
+取代 supersedes    新结论推翻旧结论
+来源于 derived_from 结论提炼自原料
+产生 produces      会话产出记忆
+引用 references    正文引用了另一条
+转化 transforms    待办变成了结论
+应用于 applies_to  知识用到某个项目上
+影响 affects       改动波及到别处
+```
+
+建边走 `kb_link` / `POST /link` / `kb link`，**拼错的关系名会被拒绝** ——
+一条 `rel="supersede"` 的哑边在图上和真边长得一样，比没有边更糟。
+
+现有库里 `rels: produces=696`：全是"会话卡 → 抽出的卡"。**归属类边一条都没造过**，
+它们要靠 `kb_link` 显式建 —— 自动推断"这个文档属于那个项目"只会得到一堆看似合理的胡说。
 
 ## 三条设计红线
 

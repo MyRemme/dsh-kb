@@ -9,7 +9,20 @@
 import { parseArgs } from "node:util";
 import process from "node:process";
 import path from "node:path";
-import { openDb, upsertFact, updateFact, getFact, reindex, sweepStale, defaultDbPath } from "../lib/store.js";
+import {
+	openDb,
+	upsertFact,
+	updateFact,
+	getFact,
+	resolveFact,
+	reindex,
+	sweepStale,
+	defaultDbPath,
+	linkFacts,
+	backfillGroups,
+	renameSessionEdges,
+	REL_KINDS,
+} from "../lib/store.js";
 import { seg } from "../lib/segment.js";
 import { search, renderResults } from "../lib/search.js";
 import { ingest } from "../lib/ingest.js";
@@ -17,6 +30,7 @@ import { digest, treeRows } from "../lib/digest.js";
 import { exportStatic } from "../lib/export.js";
 import { exportMaterial } from "../lib/distill.js";
 import { mirrorToDir, importFromDir } from "../lib/markdown.js";
+import { statsOf } from "../lib/routes.js";
 
 const C = {
 	dim: "\u001b[2m",
@@ -40,12 +54,18 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb update <id> [--body B] [--title T] [--path P] [--status S]  改原卡（id 不变，旧版进历史）
   kb sweep [--days N]              把过期快照卡降级（默认 30 天）
   kb distill [--path P] [--limit N] 提炼出料：原料 + 提示词（无模型通道时给会话自己写）
+  kb link --src ID --dst ID --rel R [--note N]
+                                   建一条语义关系边（关系名白名单见下）
+  kb migrate [--scope all|groups|edges]  重算派生数据（幂等）
   kb reindex                       重建全文索引
   kb export [--out FILE] [--limit N]  导出单文件 HTML 快照（默认 $DSH_HOME/kb/preview.html）
   kb export --md --dir D [--limit N] [--dry]
                                    投影成 Markdown 目录树（可 git、可手改、可 diff）
   kb import --md --dir D [--force] [--dry]
                                    把目录树的改动写回库（默认只认比库里新的文件）
+
+关系名白名单:
+  ${REL_KINDS.join(" / ")}
 
 环境:
   DSH_HOME     默认 ~/.dsh
@@ -143,25 +163,9 @@ function cmdTree(argv) {
 }
 
 function cmdStats() {
+	// 与 GET /api/dsh-kb/stats 共用 statsOf：CLI 和面板看到的必须是同一份数字
 	const { db, file } = open();
-	const one = (sql) => db.prepare(sql).get().n;
-	const all = (sql) => db.prepare(sql).all();
-	console.log(
-		JSON.stringify(
-			{
-				facts: one("SELECT COUNT(*) AS n FROM fact"),
-				active: one("SELECT COUNT(*) AS n FROM fact WHERE status='active'"),
-				sessions: one("SELECT COUNT(*) AS n FROM ingest_log WHERE err=''"),
-				edges: one("SELECT COUNT(*) AS n FROM edge"),
-				nodes: one("SELECT COUNT(*) AS n FROM node"),
-				kinds: Object.fromEntries(all("SELECT kind, COUNT(*) AS n FROM fact GROUP BY kind ORDER BY n DESC").map((r) => [r.kind, r.n])),
-				paths: Object.fromEntries(all("SELECT path, COUNT(*) AS n FROM fact GROUP BY path ORDER BY n DESC LIMIT 12").map((r) => [r.path, r.n])),
-				db: file,
-			},
-			null,
-			1,
-		),
-	);
+	console.log(JSON.stringify(statsOf(db, file), null, 1));
 }
 
 function cmdShow(argv) {
@@ -229,6 +233,36 @@ function cmdForget(argv) {
 	const { db } = open();
 	const r = db.prepare("UPDATE fact SET status='superseded', updated_at=? WHERE id=? OR id LIKE ?").run(Date.now(), id, `${id}%`);
 	console.log(JSON.stringify({ updated: r.changes }));
+}
+
+function cmdLink(argv) {
+	const { values } = parseArgs({
+		args: argv,
+		options: { src: { type: "string" }, dst: { type: "string" }, rel: { type: "string" }, note: { type: "string" }, w: { type: "string" } },
+	});
+	if (!values.src || !values.dst || !values.rel) throw new Error("需要 --src / --dst / --rel");
+	const { db } = open();
+	const pick = (value) => {
+		const hit = resolveFact(db, String(value).trim());
+		if (hit === undefined) throw new Error(`没有这张卡：${value}`);
+		return hit.id;
+	};
+	try {
+		console.log(JSON.stringify(linkFacts(db, pick(values.src), pick(values.dst), values.rel, { w: values.w, note: values.note })));
+	} catch (error) {
+		// 校验类错误（关系名拼错、自环、卡不存在）是用法问题，一行说清就够，不摊栈
+		console.error(`建边失败：${String(error?.message ?? error)}`);
+		process.exitCode = 1;
+	}
+}
+
+function cmdMigrate(argv) {
+	const { values } = parseArgs({ args: argv, options: { scope: { type: "string", default: "all" } } });
+	const { db } = open();
+	const result = { scope: values.scope };
+	if (values.scope === "all" || values.scope === "groups") result.groups = backfillGroups(db);
+	if (values.scope === "all" || values.scope === "edges") result.edges = renameSessionEdges(db);
+	console.log(JSON.stringify(result));
 }
 
 function cmdExport(argv) {
@@ -330,6 +364,10 @@ function main() {
 		case "reindex":
 			console.log("reindexed", reindex(db, seg));
 			return;
+		case "link":
+			return cmdLink(rest);
+		case "migrate":
+			return cmdMigrate(rest);
 		case "export":
 			return cmdExport(rest);
 		case "import":

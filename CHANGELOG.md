@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.6.0
+
+语义模型（L2）：把"一堆事实卡"变成"有类型、有关系"的知识图谱。
+
+**1. 展示分组落库（`fact.grp`）**
+
+kind 回答"这条东西是什么形态"（fix / episode / artifact…），grp 回答"它该出现在哪个抽屉里"
+（记忆 / 文档 / 对话 / 项目 / 任务）。派生规则在 `groupOfFact(kind, path)`，落库是为了让
+`/facts?group=` 与 `/graph?group=` 能走索引，而不是取 400 张卡再在前端筛。
+
+顺序有讲究：先按 kind 判具体类别，再看 `project/` 前缀 —— 否则 `project/code` 下的
+一条 fix 会被塞进"项目"抽屉。前端 `groupOf` 与后端 `groupOfFact` 的一致性由测试穷举钉住。
+
+真库迁移结果：`talk=728 / memory=213 / task=105 / project=90 / doc=68`。
+
+**2. 九种语义关系**
+
+`REL_KINDS` 白名单：包含 / 关联 / 取代 / 来源于 / 产生 / 引用 / 转化 / 应用于 / 影响。
+对外建边走新函数 `linkFacts(db, src, dst, rel)`，它**拒绝**拼错的关系名、自环、指向不存在的卡。
+理由：一条 `rel="supersede"` 的哑边在图上和真边长得一样，比没有边更糟。
+
+- 工具 `kb_link`（第 10 个）+ `POST /link` + `kb link --src --dst --rel`
+- 端点 `POST /migrate`（重算分组 / 改名老边，幂等）+ `kb migrate`
+
+**3. `contains` → `produces`**
+
+老库里 696 条边全是"会话卡 → 抽出的卡"，语义是**产生**不是**包含**。迁移一次性改名
+（`user_version` 3）。现在 `rels: produces=696` —— 库里没有任何"归属"类边，因为一条都
+没造过；那类边要靠 `kb_link` 显式建，不自动编。
+
+**4. `/graph` 的两个真 bug**
+
+- `SELECT` 里没有 `tags` / `confidence`，但 map 里在用 —— 卡片上的标签 chips 一直是空的；
+- 不认 `group` 参数。
+
+**5. 踩到的升级路径坑**
+
+`CREATE INDEX ... ON fact(grp)` 一开始和其他索引一起写在 `SCHEMA` 里。新库没事（建表时就有列），
+老库直接 `no such column: grp` —— 因为 `SCHEMA` 先执行，而 `ALTER TABLE` 在后面的 `migrate` 里。
+索引挪进 `migrate`，等列补上再建。
+
+**验证**
+
+- 114 项测试全绿（新增 `test/semantics.test.js` 6 项：分组映射矩阵、写入/改名跟随、
+  backfill 幂等、九种关系、老库边改名、**前后端分组规则穷举比对**）。
+- 真库迁移 178 ms；迁移后镜像往返仍幂等（`updated 0 / unchanged 1204`）。
+- `kb stats` 改用 `statsOf`，与 `GET /stats` 同一份数字（之前 CLI 自己拼了一份，少了 groups/rels）。
+
 ## 0.5.0
 
 界面重排（L1）：把"树 / 列表 / 星图"三栏换成「卡片画布 + 右侧抽屉 + 底部时间线」。
