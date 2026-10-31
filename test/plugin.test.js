@@ -71,12 +71,12 @@ test("插件导出契约：name / inject / apply / Config", () => {
 	assert.equal(typeof plugin.Config, "function");
 });
 
-test("apply 注册八个工具并注入系统提示", () => {
+test("apply 注册九个工具并注入系统提示", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	const names = ctx._tools.map((t) => t.name).sort();
-	assert.deepEqual(names, ["kb_add", "kb_distill", "kb_get", "kb_ingest", "kb_search", "kb_stats", "kb_tree", "kb_update"]);
+	assert.deepEqual(names, ["kb_add", "kb_distill", "kb_get", "kb_ingest", "kb_mirror", "kb_search", "kb_stats", "kb_tree", "kb_update"]);
 	assert.equal(ctx._sections.length, 2);
 	assert.match(ctx._sections[0].text, /kb_search/);
 	ctx._dispose();
@@ -142,15 +142,15 @@ test("kb_tree 与 kb_stats 能读到刚写的数据", async () => {
 	ctx._dispose();
 });
 
-test("ui 默认开：向 webServer 注册十二个端点，卸载时全部摘掉", () => {
+test("ui 默认开：向 webServer 注册十五个端点，卸载时全部摘掉", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	assert.deepEqual(ctx._injected, [["webServer"]]);
-	assert.equal(ctx._routes.length, 13);
+	assert.equal(ctx._routes.length, 15);
 	assert.deepEqual(
 		ctx._routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "search", "stats", "sweep", "tree", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
 	);
 	assert.ok(ctx._routes.every((r) => r.kind === "exact" && typeof r.handler === "function"));
 	ctx._dispose();
@@ -163,7 +163,7 @@ test("ui=false 不注入 webServer，工具照常可用", () => {
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db"), ui: false });
 	assert.equal(ctx._injected.length, 0);
 	assert.equal(ctx._routes.length, 0);
-	assert.equal(ctx._tools.length, 8);
+	assert.equal(ctx._tools.length, 9);
 	ctx._dispose();
 });
 
@@ -172,7 +172,7 @@ test("没有 ctx.inject 的宿主（老运行时）不影响加载", () => {
 	delete ctx.inject;
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	assert.doesNotThrow(() => plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") }));
-	assert.equal(ctx._tools.length, 8);
+	assert.equal(ctx._tools.length, 9);
 	ctx._dispose();
 });
 
@@ -330,7 +330,7 @@ test("入口包装层：转发 apply，导入失败也照样导出契约", async
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	entry.apply(ctx, { dbPath: path.join(dir, "kb.db"), bootFacts: 0 });
-	assert.equal(ctx._tools.length, 8, "包装层没把工具转发出来");
+	assert.equal(ctx._tools.length, 9, "包装层没把工具转发出来");
 	ctx._dispose();
 });
 

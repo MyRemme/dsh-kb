@@ -8,6 +8,7 @@
 
 import { parseArgs } from "node:util";
 import process from "node:process";
+import path from "node:path";
 import { openDb, upsertFact, updateFact, getFact, reindex, sweepStale, defaultDbPath } from "../lib/store.js";
 import { seg } from "../lib/segment.js";
 import { search, renderResults } from "../lib/search.js";
@@ -15,6 +16,7 @@ import { ingest } from "../lib/ingest.js";
 import { digest, treeRows } from "../lib/digest.js";
 import { exportStatic } from "../lib/export.js";
 import { exportMaterial } from "../lib/distill.js";
+import { mirrorToDir, importFromDir } from "../lib/markdown.js";
 
 const C = {
 	dim: "\u001b[2m",
@@ -40,6 +42,10 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb distill [--path P] [--limit N] 提炼出料：原料 + 提示词（无模型通道时给会话自己写）
   kb reindex                       重建全文索引
   kb export [--out FILE] [--limit N]  导出单文件 HTML 快照（默认 $DSH_HOME/kb/preview.html）
+  kb export --md --dir D [--limit N] [--dry]
+                                   投影成 Markdown 目录树（可 git、可手改、可 diff）
+  kb import --md --dir D [--force] [--dry]
+                                   把目录树的改动写回库（默认只认比库里新的文件）
 
 环境:
   DSH_HOME     默认 ~/.dsh
@@ -228,15 +234,48 @@ function cmdForget(argv) {
 function cmdExport(argv) {
 	const { values } = parseArgs({
 		args: argv,
-		options: { out: { type: "string" }, limit: { type: "string" } },
+		options: {
+			out: { type: "string" },
+			limit: { type: "string" },
+			md: { type: "boolean", default: false },
+			dir: { type: "string" },
+			dry: { type: "boolean", default: false },
+		},
 	});
 	const { db, file } = open();
+	if (values.md) {
+		const result = mirrorToDir(db, values.dir ?? path.join(path.dirname(file), "mirror"), {
+			limit: values.limit ? Number(values.limit) : undefined,
+			dryRun: values.dry,
+		});
+		console.log(JSON.stringify(result, null, 1));
+		return;
+	}
 	const result = exportStatic(db, {
 		out: values.out,
 		limit: values.limit ? Number(values.limit) : undefined,
 		dbPath: file,
 	});
 	console.log(JSON.stringify(result));
+}
+
+function cmdImport(argv) {
+	const { values } = parseArgs({
+		args: argv,
+		options: {
+			md: { type: "boolean", default: false },
+			dir: { type: "string" },
+			force: { type: "boolean", default: false },
+			dry: { type: "boolean", default: false },
+		},
+	});
+	if (!values.md) throw new Error("目前只支持 --md 导入");
+	const { db, file } = open();
+	const result = importFromDir(db, values.dir ?? path.join(path.dirname(file), "mirror"), {
+		force: values.force,
+		dryRun: values.dry,
+	});
+	console.log(JSON.stringify(result, null, 1));
 }
 
 function main() {
@@ -293,6 +332,8 @@ function main() {
 			return;
 		case "export":
 			return cmdExport(rest);
+		case "import":
+			return cmdImport(rest);
 		default:
 			console.error(`unknown command: ${cmd}\n`);
 			console.log(HELP);

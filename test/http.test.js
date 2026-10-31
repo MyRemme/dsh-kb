@@ -12,6 +12,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, request } from "node:http";
+import { existsSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -90,7 +91,7 @@ function raw(pathname, options = {}) {
 }
 
 test("路由表与端点清单一一对应", () => {
-	assert.equal(api.routes.length, 13);
+	assert.equal(api.routes.length, 15);
 	const declared = new Set(ENDPOINTS.map(([method, p]) => `${method} ${p}`));
 	for (const r of api.routes) {
 		const methods = [...declared].filter((entry) => entry.endsWith(` ${r.path}`));
@@ -98,7 +99,7 @@ test("路由表与端点清单一一对应", () => {
 	}
 	assert.deepEqual(
 		api.routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "search", "stats", "sweep", "tree", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "mirror", "search", "stats", "sweep", "tree", "unmirror", "update"].map((n) => `${API_PREFIX}/${n}`).sort(),
 	);
 });
 
@@ -337,4 +338,34 @@ test("POST /sweep 降级过期快照卡", async () => {
 	assert.equal(res.status, 200);
 	assert.ok(res.body.data.staled >= 1);
 	assert.equal(db.prepare("SELECT status FROM fact WHERE title=?").get("很旧的待办").status, "doubtful");
+});
+
+test("POST /mirror 落地目录，二次调用全部 unchanged", async () => {
+	const mirrorDir = path.join(dir, "mirror-http");
+	await post(`${API_PREFIX}/add`, { title: "镜像端点卡", body: "正文", path: "topic/dsh", kind: "fact" });
+	const first = await post(`${API_PREFIX}/mirror`, { dir: mirrorDir });
+	assert.equal(first.status, 200);
+	assert.equal(first.body.ok, true);
+	assert.ok(first.body.data.written >= 1);
+	assert.ok(existsSync(mirrorDir));
+	const second = await post(`${API_PREFIX}/mirror`, { dir: mirrorDir });
+	assert.equal(second.body.data.written, 0, "内容没变就不该写盘");
+	assert.ok(second.body.data.unchanged >= 1);
+});
+
+test("POST /unmirror 读回镜像；目录不存在给 500 而不是静默 0", async () => {
+	const mirrorDir = path.join(dir, "mirror-http2");
+	await post(`${API_PREFIX}/add`, { title: "回灌端点卡", body: "正文", path: "topic/dsh", kind: "fact" });
+	await post(`${API_PREFIX}/mirror`, { dir: mirrorDir });
+	const back = await post(`${API_PREFIX}/unmirror`, { dir: mirrorDir });
+	assert.equal(back.status, 200);
+	assert.equal(back.body.data.updated, 0);
+	assert.ok(back.body.data.unchanged >= 1);
+
+	const dry = await post(`${API_PREFIX}/unmirror`, { dir: mirrorDir, dryRun: true });
+	assert.equal(dry.body.data.dryRun, true);
+
+	const bad = await post(`${API_PREFIX}/unmirror`, { dir: path.join(dir, "nope-xyz") });
+	assert.equal(bad.status, 500);
+	assert.equal(bad.body.ok, false);
 });

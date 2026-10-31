@@ -7,6 +7,8 @@
 #
 # ui 关掉只停 /api/dsh-kb/*（面板随之打不开）；工具与系统提示不受影响。
 # 行 id 是设置命名空间（面板 id 也用它），name 才是模块名。
+#
+# mirrorDir 留空 = 库旁边的 mirror/：Markdown 镜像跟着库一起备份、一起迁移。
 - insert:
     - id: dsh-kb
       name: "@myremme/dsh-kb"
@@ -19,3 +21,4 @@
         bootFacts: 6
         ingestEveryMinutes: 0
         staleDays: 30
+        mirrorDir: ""

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.4.0
+
+Markdown 镜像层（L3 剩下那半）：`kb.db` 仍是唯一真身，`mirror/` 是给人和 `git` 看的投影。
+
+**为什么加**
+
+「长期记忆」和「本地知识库」是一个包里的两条能力线（不拆插件），但只有 SQLite 时，
+知识库那半是隐形的：6 MB 二进制，人读不了、进不了 git、换机器得整包搬。
+图3 那种「Markdown 记忆文件 + SQLite 知识数据库」的双层，缺的就是上面那层。
+
+**新增**
+
+- `lib/markdown.js`：`mirrorToDir` / `importFromDir` / `planMirror` / `readMirror` /
+  `renderFactFile` / `parseFrontmatter`（自写，零 YAML 依赖）/ `normalizeBody`。
+- `kb_mirror` 工具（第 9 个）+ `/api/dsh-kb/mirror` `/unmirror`（第 14、15 个端点）。
+- CLI：`kb export --md [--dir] [--dry]`、`kb import --md [--dir] [--force] [--dry]`。
+- 配置项 `mirrorDir`（默认留空 = 库旁边的 `mirror/`）。
+
+**四条刻意的行为**
+
+| 行为 | 原因 |
+|---|---|
+| 按 `id` 匹配已有文件，标题改了只改名 | 否则 git 里全是删一个加一个 |
+| 内容没变不写盘 | 时间戳噪声会淹没真 diff |
+| 库里已没有的 id 移进 `.trash/` | 删除不该在一次导出里发生 |
+| 导入只认比库里新的文件，`--force` 才全灌 | 重新 clone 旧镜像不该把库回滚 |
+
+**两个踩到的坑（都在测试里钉住了）**
+
+- **CRLF**：`parseFrontmatter` 拆行后用 `\n` 重拼，带 `\r\n` 的正文一往返就被判成
+  「被改过」——真库上 1199 张里有 30 张中招。修法是渲染与比较两条路都折成 LF，
+  库里原字节不动。
+- **`upsertFact` 不认外部 id**：它按内容哈希生成 id，而镜像里的 id 是既成事实
+  （别的卡可能已有 `edge` 指向它）。新增 `insertFactWithId`，`f_` + 8 位以上十六进制
+  才沿用，格式不合法退回内容哈希。
+
+**实测**（真库 1199 张）
+
+- 首刷 674 个改名 + 525 未变，708 ms；二刷全 `unchanged`。
+- 导回零改动：`created 0 / updated 0 / stale 0 / unchanged 1199`。
+- 镜像共 1200 个文件（1199 卡 + README），2.1 MB。
+
+**测试** 90 → 108（新增 `test/markdown.test.js` 15 项 + 端点 2 项）。
+
 ## 0.3.3
 
 修 0.3.2 的一处致命疏漏：**`lib/entry.js` 还留着 `export default apply`**。

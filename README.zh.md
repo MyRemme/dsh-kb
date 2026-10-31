@@ -43,7 +43,7 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 
 ## 用
 
-给模型的七个工具：
+给模型的九个工具：
 
 | 工具 | 作用 |
 |---|---|
@@ -55,10 +55,11 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | `kb_stats` | 健康度：卡数、类型、路径、边数、实体数、降级数 |
 | `kb_ingest` | 直接提取：增量吸收 + 重算摘要 + 降级过期快照（幂等，零模型） |
 | `kb_distill` | 模型提炼：原料 → 结论卡（带 `derived_from` 边）；无模型通道时退回出料 |
+| `kb_mirror` | 投影成 Markdown 目录树（可 git / 可手改），或把目录改动写回库 |
 
 开场注入：每轮组装系统提示时现算最近 N 张卡（`bootFacts`，默认 6），所以上一轮写下的东西下一轮就在上下文里。
 
-浏览器里的侧边栏「记忆」面板（树 / 列表 / 详情 / 图谱，可新建、可标失效），数据来自十三个端点：
+浏览器里的侧边栏「记忆」面板（树 / 列表 / 详情 / 图谱，可新建、可标失效），数据来自十五个端点：
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -75,6 +76,8 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | POST | `/api/dsh-kb/ingest` | 增量吸收 + 重算摘要 |
 | POST | `/api/dsh-kb/sweep` | 手动降级过期快照卡 |
 | POST | `/api/dsh-kb/distill` | 模型提炼（无通道时返回原料 + 提示词） |
+| POST | `/api/dsh-kb/mirror` | 投影成 Markdown 目录树（`dir` / `dryRun`） |
+| POST | `/api/dsh-kb/unmirror` | 把镜像里的改动写回库（`force` / `dryRun`） |
 
 端点只校验来源（同源或回环，非 GET 要求严格同源）：本机进程本来就能读 `kb.db`，加 cookie 认证挡不住谁。**若经 lan-pair 之类暴露到内网，必须先换成宿主会话凭证校验。**
 
@@ -91,7 +94,31 @@ npx dsh-kb update <id> --body "新正文"
 npx dsh-kb sweep --days 30
 npx dsh-kb distill --path topic/dsh   # 出料：原料 + 提示词
 npx dsh-kb export [--out FILE]          # 单文件 HTML 快照，默认 $DSH_HOME/kb/preview.html
+npx dsh-kb export --md [--dir D]        # 投影成 Markdown 目录树，默认 $DSH_HOME/kb/mirror
+npx dsh-kb import --md [--dir D]        # 把目录里的改动写回库（默认只认比库里新的文件）
 ```
+
+## Markdown 镜像
+
+`kb.db` 是唯一真身，`mirror/` 是投影 —— 存在的理由是「人能看见、能 `git diff`、能用编辑器改」。
+
+```
+~/.dsh/kb/mirror/
+├── README.md                      ← 目录说明 + 统计
+├── topic/dsh/xxx--5cf96acc.md     ← 路径即目录，文件名 = 标题 + id 短码
+└── project/code/yyy--e04b92da.md
+```
+
+每条 frontmatter 带 `id` / `title` / `kind` / `path` / `tags` / `status` / `confidence` / `updated` / `mirror`。四条行为是刻意设计的：
+
+| 行为 | 为什么 |
+|---|---|
+| 按 `id` 匹配已有文件，标题改了只**改名** | 否则 git 里全是「删一个加一个」 |
+| 内容没变**不写盘** | 时间戳噪声会淹没真 diff |
+| 库里已没有的 id 移进 `.trash/` | 误删能捞回来；删除不该在一次导出里发生 |
+| 导入只认**比库里新**的文件，`--force` 才全灌 | 重新 clone 一份旧镜像不该把库回滚 |
+
+正文换行统一折成 LF（库里原字节不动）——不然 CRLF 卡一往返就被判成「被改过」。
 
 ## 三条设计红线
 
