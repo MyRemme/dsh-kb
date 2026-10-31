@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.7.4
+
+第三轮审查。抓到的是**上一版自己埋的 bug**。
+
+**1. 搜索时四个筛选器全丢**
+
+0.7.3 把筛选加在列表分支上，搜索分支还是老样子：
+
+```js
+if (q.trim() !== "") {
+    call("/search", { query: { q, k: 40, path } });   // kind/since/status/sort 一个都没带
+}
+```
+
+表现为：选了「修复」+「近 7 天」，一输入搜索词筛选就静默失效，看着像生效了其实没有。
+
+修法不是补参数，而是**抽出两个纯函数** `buildFactQuery` / `buildSearchQuery`，
+列表与搜索共用同一套语义 —— 这类漂移靠"记得两边都改"是防不住的，得让它们物理上共用一个出口。
+两个函数都导出到 `__queries` 供测试钉住。
+
+**2. search.js 根本没有 status 选项**
+
+它只有 `includeSuperseded` 布尔，只能表达"只看在用"和"看全部"，
+面板的「存疑 / 已取代」两个值传下去无处安放。补了 `opts.status`，优先级高于布尔。
+
+**3. 修 1 的时候自己踩了个 TDZ**
+
+把 `filters.push("f.status='active'")` 挪位置时，`const wantStatus` 留在了后面 ——
+使用先于声明，13 个检索测试当场全红。这个是测试网兜住的，值得记一笔：
+**改排序逻辑时，常量声明和使用必须一起搬。**
+
+**审查里确认后端没问题**
+
+| 验证 | 结果 |
+|---|---|
+| `since=1 / 7 / 800` | 32 / 139 / 1226 条，线性合理 |
+| `sort=;DROP TABLE fact` | 回落到默认排序，**无注入**（白名单映射） |
+| `group=talk&kind=fix` | 0 条（talk 里确实没有 fix，fix 属 memory 组）—— 组合条件正确 |
+
+**审查里看了但没改的**
+
+- `probeModels` 的 `for (const arg of [id, entry])` 在 `listModels(id)` 返回空数组时
+  会再拿 entry 试一次。冗余一次调用，无害。
+- `/models` 的 `debug` 字段会把宿主异常消息回给前端。本机工具，留着便于定位。
+- Timeline 的拖拽没调 `setPointerCapture`，靠 `onPointerLeave` 兜底。
+
+测试 127 → 129。
+
 ## 0.7.3
 
 工具条重排 + 四个筛选器。这次是先截屏量出来的，不是凭感觉改的。

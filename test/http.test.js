@@ -340,6 +340,28 @@ test("POST /sweep 降级过期快照卡", async () => {
 	assert.equal(db.prepare("SELECT status FROM fact WHERE title=?").get("很旧的待办").status, "doubtful");
 });
 
+test("GET /search 也吃 kinds / since / status（面板筛选在搜索态同样有效）", async () => {
+	await post(`${API_PREFIX}/add`, { title: "搜索筛选 fix 样例", body: "共同词 zebra", kind: "fix", path: "topic/x" });
+	await post(`${API_PREFIX}/add`, { title: "搜索筛选 fact 样例", body: "共同词 zebra", kind: "fact", path: "topic/x" });
+
+	const all = await get(`${API_PREFIX}/search?q=zebra&k=10`);
+	assert.ok(all.body.data.length >= 2, "不筛时两张都要在");
+
+	const onlyFix = await get(`${API_PREFIX}/search?q=zebra&k=10&kinds=fix`);
+	assert.ok(onlyFix.body.data.length >= 1);
+	assert.ok(onlyFix.body.data.every((r) => r.kind === "fix"), "kinds 过滤要生效");
+
+	// 时间筛选：一年内的能查到，未来时间点查不到
+	const fresh = await get(`${API_PREFIX}/search?q=zebra&k=10&since=365`);
+	assert.ok(fresh.body.data.length >= 1, "since=365 应该能查到刚写的卡");
+	const future = await get(`${API_PREFIX}/search?q=zebra&k=10&since=0.0000001`);
+	assert.equal(future.status, 200);
+
+	// 状态筛选：不该把 superseded 的卡查出来
+	const active = await get(`${API_PREFIX}/search?q=zebra&k=10&status=active`);
+	assert.ok(active.body.data.every((r) => r.status === "active"));
+});
+
 test("GET /search 与 /tree 也把 undefined 当成没给（不能只堵一半）", async () => {
 	await post(`${API_PREFIX}/add`, { title: "清理参数回归卡", body: "正文内容", path: "topic/dsh" });
 	const cleanSearch = await get(`${API_PREFIX}/search?q=清理参数&k=5`);

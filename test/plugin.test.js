@@ -438,3 +438,39 @@ test("星图布局：径向骨架（父枝→子枝）+ 星体散布 + 事实边
 	const again = client.__galaxy({ tree, facts, edges: [] });
 	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), client.__galaxy({ tree, facts, edges: [] }).stars.map((s) => [s.id, s.x, s.y]));
 });
+
+test("列表与搜索共用同一套筛选语义（搜索不能丢筛选）", async () => {
+	const { readFileSync: read } = await import("node:fs");
+	const source = read(new URL("../lib/client.js", import.meta.url), "utf8");
+	let registration;
+	new Function("window", "document", source)({ __ModuleLoader__: { load: (r) => { registration = r; } } }, undefined);
+	const client = registration.factory((spec) => {
+		if (spec === "react") {
+			return { createElement: () => null, Fragment: "F", Component: class {}, useState: (v) => [v, () => {}], useEffect: () => {}, useCallback: (f) => f, useMemo: (f) => f(), useRef: () => ({ current: null }) };
+		}
+		throw new Error(`未声明模块：${spec}`);
+	});
+	const { fact, search } = client.__queries;
+	const filters = { kind: "fix", since: "7", status: "active", sort: "ts" };
+
+	const f = fact(80, "topic/dsh", "talk", filters);
+	assert.equal(f.kind, "fix");
+	assert.equal(f.since, "7");
+	assert.equal(f.sort, "ts");
+	assert.equal(f.path, "topic/dsh");
+	assert.equal(f.group, "talk");
+
+	// 这条是重点：改筛选之后再搜索，筛选必须还在
+	const s = search("渲染", "topic/dsh", filters);
+	assert.equal(s.kinds, "fix", "搜索必须带类型筛选");
+	assert.equal(s.since, "7", "搜索必须带时间筛选");
+	assert.equal(s.status, "active", "搜索必须带状态筛选");
+	assert.equal(s.q, "渲染");
+
+	// group=all 不能下发成过滤条件
+	assert.equal(fact(80, "", "all", filters).group, undefined);
+	// 没有筛选时不该塞空串（后端会把空串当"给了"）
+	const empty = fact(80, "", "all", {});
+	assert.equal(empty.kind, undefined);
+	assert.equal(empty.since, undefined);
+});
