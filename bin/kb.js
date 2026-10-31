@@ -30,6 +30,7 @@ import { digest, treeRows } from "../lib/digest.js";
 import { exportStatic } from "../lib/export.js";
 import { exportMaterial } from "../lib/distill.js";
 import { mirrorToDir, importFromDir } from "../lib/markdown.js";
+import { reap } from "../lib/reap.js";
 import { statsOf } from "../lib/routes.js";
 
 const C = {
@@ -53,6 +54,7 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb forget <id>                   标记失效（不删）
   kb update <id> [--body B] [--title T] [--path P] [--status S]  改原卡（id 不变，旧版进历史）
   kb sweep [--days N]              把过期快照卡降级（默认 30 天）
+ kb reap [--dry-run] [--threshold 0.09] [--purge-threshold 0.04]            按重要度×时间衰减遗忘（老的流水账淡出，结论卡留着）
   kb distill [--path P] [--limit N] 提炼出料：原料 + 提示词（无模型通道时给会话自己写）
   kb link --src ID --dst ID --rel R [--note N]
                                    建一条语义关系边（关系名白名单见下）
@@ -227,6 +229,40 @@ function cmdSweep(argv) {
 	console.log(JSON.stringify({ staled: sweepStale(db, { days: values.days ? Number(values.days) : undefined }) }));
 }
 
+function cmdReap(argv) {
+	const { values } = parseArgs({
+		args: argv,
+		options: {
+			"dry-run": { type: "boolean" },
+			threshold: { type: "string" },
+			"purge-threshold": { type: "string" },
+			"include-doubtful": { type: "boolean" },
+			json: { type: "boolean" },
+		},
+	});
+	const { db } = open();
+	const dryRun = values["dry-run"] === true;
+	const result = reap(db, {
+		dryRun,
+		threshold: values.threshold ? Number(values.threshold) : undefined,
+		purgeThreshold: values["purge-threshold"] ? Number(values["purge-threshold"]) : undefined,
+		includeDoubtful: values["include-doubtful"] === true,
+	});
+	if (values.json === true) {
+		console.log(JSON.stringify(result, null, 1));
+		return;
+	}
+	console.log(`${dryRun ? "[dry-run] " : ""}共 ${result.total} 张：降级 ${result.demoted}，淘汰 ${result.superseded}，保留 ${result.kept}`);
+	console.log(`阈值 降级<${result.threshold} 淘汰<${result.purgeThreshold}`);
+	if (result.sample.length > 0) {
+		console.log("最该忘的：");
+		for (const item of result.sample) {
+			console.log(`  ${item.score.toFixed(3)}  [${item.kind}|${item.bucket}] ${item.title.slice(0, 40)}`);
+		}
+	}
+	if (dryRun) console.log("这次没有改动任何卡；去掉 --dry-run 才真正执行。");
+}
+
 function cmdForget(argv) {
 	const id = argv[0];
 	if (!id) throw new Error("缺少 id");
@@ -357,6 +393,8 @@ function main() {
 			return cmdForget(rest);
 		case "update":
 			return cmdUpdate(rest);
+		case "reap":
+			return cmdReap(rest);
 		case "sweep":
 			return cmdSweep(rest);
 		case "distill":
