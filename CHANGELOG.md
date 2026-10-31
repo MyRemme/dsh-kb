@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.6.3
+
+对一个已经"能用"的版本做审查，找出三处同源缺口。
+
+**1. `cleanParam` 只堵了一半**
+
+0.6.2 给 `/facts` 与 `/graph` 加了 `cleanParam`，但 `/search` 的 `path` 和 `/tree` 的 `prefix`
+还在裸读。同一个静默空表会从另一个入口复发 —— 前端不再发了，历史缓存、第三方脚本、
+手敲的 curl 还会发。
+
+**2. 镜像端点可以往任意路径写**
+
+`POST /mirror` 的 `dir` 直接来自 body，`mkdirSync` + `writeFileSync` 全套。本机进程当然能
+写任何地方，但"能写任何地方"不该由一次 HTTP 请求决定。新增 `safeDir()`：API 侧只允许落在
+`$DSH_HOME` 下面，越界返回 403 `dir-not-allowed`。CLI 不设这个限制 —— 那是用户本人敲的命令。
+
+**3. 切类型 chips 可能得到空表**
+
+列表只在 query / pathFilter 变化时重新请求，`/facts?limit=80` 永远取最新 80 张；
+chips 只在**前端**过滤。于是"文档 68"这类分组只要它的卡不在最新 80 条里，切过去就是空表 ——
+又一个静默空表，只是触发条件更隐蔽。
+
+修法：`loadList` 与 `loadGraph` 都接受并上送 `group`，chips 变化触发重新请求；
+前端过滤保留作兜底。
+
+**审查时的实测数据**（真库 1215 张卡、端口 5712）
+
+| 端点 | 耗时 |
+|---|---|
+| `/stats` | 13 ms |
+| `/tree` | 71 ms |
+| `/facts?limit=80` | 11 ms |
+| `/graph?limit=400` | 9 ms |
+| `/search?q=dsh&k=6` | 20 ms |
+
+测试 116 → 118（`/search` 与 `/tree` 的 undefined 回归、`/mirror` 越界 403）。
+
 ## 0.6.2
 
 真因找到：**面板一直在正常工作，只是它把所有查询都发成了 `path=undefined`。**

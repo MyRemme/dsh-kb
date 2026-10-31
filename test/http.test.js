@@ -340,6 +340,30 @@ test("POST /sweep 降级过期快照卡", async () => {
 	assert.equal(db.prepare("SELECT status FROM fact WHERE title=?").get("很旧的待办").status, "doubtful");
 });
 
+test("GET /search 与 /tree 也把 undefined 当成没给（不能只堵一半）", async () => {
+	await post(`${API_PREFIX}/add`, { title: "清理参数回归卡", body: "正文内容", path: "topic/dsh" });
+	const cleanSearch = await get(`${API_PREFIX}/search?q=清理参数&k=5`);
+	const junkSearch = await get(`${API_PREFIX}/search?q=清理参数&k=5&path=undefined`);
+	assert.equal(junkSearch.status, 200);
+	assert.equal(junkSearch.body.data.length, cleanSearch.body.data.length, "path=undefined 不该把检索结果筛没");
+
+	const cleanTree = await get(`${API_PREFIX}/tree`);
+	const junkTree = await get(`${API_PREFIX}/tree?prefix=undefined`);
+	assert.equal(junkTree.body.data.length, cleanTree.body.data.length, "prefix=undefined 不该把树筛空");
+	assert.ok(junkTree.body.data.length > 0);
+});
+
+test("POST /mirror 拒绝落到 $DSH_HOME 之外的目录", async () => {
+	const outside = await post(`${API_PREFIX}/mirror`, { dir: "C:/Windows/Temp/dsh-kb-evil" });
+	assert.equal(outside.status, 403);
+	assert.equal(outside.body.ok, false);
+	assert.equal(outside.body.error.code, "dir-not-allowed");
+
+	const inside = await post(`${API_PREFIX}/mirror`, { dir: path.join(dir, "mirror-allowed"), dryRun: true });
+	assert.equal(inside.status, 200);
+	assert.equal(inside.body.data.dryRun, true);
+});
+
 test("POST /frontlog 把前端错误落成一行日志", async () => {
 	const res = await post(`${API_PREFIX}/frontlog`, {
 		level: "error",
