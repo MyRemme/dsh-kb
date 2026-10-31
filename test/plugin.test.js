@@ -71,12 +71,12 @@ test("插件导出契约：name / inject / apply / Config", () => {
 	assert.equal(typeof plugin.Config, "function");
 });
 
-test("apply 注册五个工具并注入系统提示", () => {
+test("apply 注册八个工具并注入系统提示", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	const names = ctx._tools.map((t) => t.name).sort();
-	assert.deepEqual(names, ["kb_add", "kb_get", "kb_ingest", "kb_search", "kb_stats", "kb_tree", "kb_update"]);
+	assert.deepEqual(names, ["kb_add", "kb_distill", "kb_get", "kb_ingest", "kb_search", "kb_stats", "kb_tree", "kb_update"]);
 	assert.equal(ctx._sections.length, 2);
 	assert.match(ctx._sections[0].text, /kb_search/);
 	ctx._dispose();
@@ -147,10 +147,10 @@ test("ui 默认开：向 webServer 注册十二个端点，卸载时全部摘掉
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	assert.deepEqual(ctx._injected, [["webServer"]]);
-	assert.equal(ctx._routes.length, 12);
+	assert.equal(ctx._routes.length, 13);
 	assert.deepEqual(
 		ctx._routes.map((r) => r.path).sort(),
-		["add", "fact", "facts", "forget", "graph", "history", "ingest", "search", "stats", "sweep", "tree", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "graph", "history", "ingest", "search", "stats", "sweep", "tree", "update"].map((n) => `/api/dsh-kb/${n}`).sort(),
 	);
 	assert.ok(ctx._routes.every((r) => r.kind === "exact" && typeof r.handler === "function"));
 	ctx._dispose();
@@ -163,7 +163,7 @@ test("ui=false 不注入 webServer，工具照常可用", () => {
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db"), ui: false });
 	assert.equal(ctx._injected.length, 0);
 	assert.equal(ctx._routes.length, 0);
-	assert.equal(ctx._tools.length, 7);
+	assert.equal(ctx._tools.length, 8);
 	ctx._dispose();
 });
 
@@ -172,7 +172,7 @@ test("没有 ctx.inject 的宿主（老运行时）不影响加载", () => {
 	delete ctx.inject;
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	assert.doesNotThrow(() => plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") }));
-	assert.equal(ctx._tools.length, 7);
+	assert.equal(ctx._tools.length, 8);
 	ctx._dispose();
 });
 
@@ -330,6 +330,48 @@ test("入口包装层：转发 apply，导入失败也照样导出契约", async
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	entry.apply(ctx, { dbPath: path.join(dir, "kb.db"), bootFacts: 0 });
-	assert.equal(ctx._tools.length, 7, "包装层没把工具转发出来");
+	assert.equal(ctx._tools.length, 8, "包装层没把工具转发出来");
 	ctx._dispose();
+});
+
+test("星图布局：径向树骨架 + 确定性散布 + 结构线", async () => {
+	const { readFileSync } = await import("node:fs");
+	const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
+	let registration;
+	new Function("window", "document", source)({ __ModuleLoader__: { load: (r) => { registration = r; } } }, undefined);
+	const client = registration.factory((spec) => {
+		if (spec === "react") {
+			return { createElement: () => null, useState: () => [], useEffect: () => {}, useCallback: (f) => f, useMemo: (f) => f(), useRef: () => ({ current: null }) };
+		}
+		throw new Error(`未声明模块：${spec}`);
+	});
+	assert.equal(typeof client.__layout, "function");
+
+	const tree = [
+		{ path: "topic", depth: 0, count: 0 },
+		{ path: "topic/dsh", depth: 1, count: 2 },
+		{ path: "topic/model", depth: 1, count: 1 },
+	];
+	const facts = [
+		{ id: "f_a", title: "A", kind: "fix", path: "topic/dsh", confidence: 0.9, ts: 1 },
+		{ id: "f_b", title: "B", kind: "fact", path: "topic/dsh", confidence: 0.6, ts: 2 },
+		{ id: "f_c", title: "C", kind: "decision", path: "topic/model", confidence: 0.8, ts: 3 },
+	];
+	const edges = [{ src: "f_a", dst: "f_b", rel: "related" }];
+
+	const galaxy = client.__layout({ tree, facts, edges, size: 720 });
+	assert.equal(galaxy.hubs.length, 3);
+	assert.equal(galaxy.stars.length, 3);
+	// 每颗星一条结构线 + 一条事实边
+	assert.equal(galaxy.links.filter((l) => l.kind === "spine").length, 3);
+	assert.equal(galaxy.links.filter((l) => l.kind === "related").length, 1);
+
+	// 深层枝绕得更远：dsh/model 的半径应大于 topic
+	const topic = galaxy.hubs.find((h) => h.path === "topic");
+	const dsh = galaxy.hubs.find((h) => h.path === "topic/dsh");
+	assert.ok(dsh.radius > topic.radius);
+
+	// 确定性：同样的输入两次布局一致（刷新不跳）
+	const again = client.__layout({ tree, facts, edges, size: 720 });
+	assert.deepEqual(again.stars.map((s) => [s.id, s.x, s.y]), galaxy.stars.map((s) => [s.id, s.x, s.y]));
 });

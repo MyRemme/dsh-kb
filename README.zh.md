@@ -53,11 +53,12 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | `kb_get` | 按 id 读全文 + 历史 + 关系 + 实体 |
 | `kb_tree` | 看骨架树：每枝多少卡、最近更新、代表卡标题 |
 | `kb_stats` | 健康度：卡数、类型、路径、边数、实体数、降级数 |
-| `kb_ingest` | 增量吸收 + 重算摘要 + 降级过期快照（幂等） |
+| `kb_ingest` | 直接提取：增量吸收 + 重算摘要 + 降级过期快照（幂等，零模型） |
+| `kb_distill` | 模型提炼：原料 → 结论卡（带 `derived_from` 边）；无模型通道时退回出料 |
 
 开场注入：每轮组装系统提示时现算最近 N 张卡（`bootFacts`，默认 6），所以上一轮写下的东西下一轮就在上下文里。
 
-浏览器里的侧边栏「记忆」面板（树 / 列表 / 详情 / 图谱，可新建、可标失效），数据来自十二个端点：
+浏览器里的侧边栏「记忆」面板（树 / 列表 / 详情 / 图谱，可新建、可标失效），数据来自十三个端点：
 
 | 方法 | 路径 | 作用 |
 |---|---|---|
@@ -73,6 +74,7 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | GET | `/api/dsh-kb/history?id=` | 历史版本 + 实体提及 |
 | POST | `/api/dsh-kb/ingest` | 增量吸收 + 重算摘要 |
 | POST | `/api/dsh-kb/sweep` | 手动降级过期快照卡 |
+| POST | `/api/dsh-kb/distill` | 模型提炼（无通道时返回原料 + 提示词） |
 
 端点只校验来源（同源或回环，非 GET 要求严格同源）：本机进程本来就能读 `kb.db`，加 cookie 认证挡不住谁。**若经 lan-pair 之类暴露到内网，必须先换成宿主会话凭证校验。**
 
@@ -87,6 +89,7 @@ npx dsh-kb stats
 npx dsh-kb forget f_0d06e6d4155a92      # 标记失效，不删
 npx dsh-kb update <id> --body "新正文"
 npx dsh-kb sweep --days 30
+npx dsh-kb distill --path topic/dsh   # 出料：原料 + 提示词
 npx dsh-kb export [--out FILE]          # 单文件 HTML 快照，默认 $DSH_HOME/kb/preview.html
 ```
 

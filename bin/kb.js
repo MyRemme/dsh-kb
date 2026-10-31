@@ -14,6 +14,7 @@ import { search, renderResults } from "../lib/search.js";
 import { ingest } from "../lib/ingest.js";
 import { digest, treeRows } from "../lib/digest.js";
 import { exportStatic } from "../lib/export.js";
+import { exportMaterial } from "../lib/distill.js";
 
 const C = {
 	dim: "\u001b[2m",
@@ -36,6 +37,7 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb forget <id>                   标记失效（不删）
   kb update <id> [--body B] [--title T] [--path P] [--status S]  改原卡（id 不变，旧版进历史）
   kb sweep [--days N]              把过期快照卡降级（默认 30 天）
+  kb distill [--path P] [--limit N] 提炼出料：原料 + 提示词（无模型通道时给会话自己写）
   kb reindex                       重建全文索引
   kb export [--out FILE] [--limit N]  导出单文件 HTML 快照（默认 $DSH_HOME/kb/preview.html）
 
@@ -195,6 +197,20 @@ function cmdUpdate(argv) {
 	console.log(JSON.stringify(updateFact(db, id, patch, seg)));
 }
 
+function cmdDistill(argv) {
+	const { values } = parseArgs({
+		args: argv,
+		options: { path: { type: "string" }, session: { type: "string" }, limit: { type: "string" } },
+	});
+	const { db } = open();
+	const pack = exportMaterial(db, {
+		path: values.path,
+		session: values.session,
+		limit: values.limit ? Number(values.limit) : undefined,
+	});
+	console.log(JSON.stringify({ material: pack.material, prompt: pack.prompt }, null, 1));
+}
+
 function cmdSweep(argv) {
 	const { values } = parseArgs({ args: argv, options: { days: { type: "string" } } });
 	const { db } = open();
@@ -270,6 +286,8 @@ function main() {
 			return cmdUpdate(rest);
 		case "sweep":
 			return cmdSweep(rest);
+		case "distill":
+			return cmdDistill(rest);
 		case "reindex":
 			console.log("reindexed", reindex(db, seg));
 			return;
