@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.3
+
+修 0.3.2 的一处致命疏漏：**`lib/entry.js` 还留着 `export default apply`**。
+
+`package.json` 的 `main` 指向 entry.js，而 cordis 加载器用 `unwrapExports()`
+（`exports = exports.default ?? exports`）取插件 —— 一旦有 default，它拿到的就是
+裸函数，挂在命名导出上的 `inject` / `name` / `Config` 全部丢失。后果：
+
+- `inject = ["tools", "systemPrompt"]` 丢 → 宿主里每次 `ctx.tools.register()` 抛
+  `cannot get property "tools" without inject`，**8 个工具一个都挂不上**，两段系统
+  提示也不注入；
+- 但 HTTP 路由不依赖 inject，照常注册 —— 所以 `/api/dsh-kb/stats` 返 200 且带真
+  数据，看起来像"装好了"，实际只剩三分之一；
+- 客户端半同理：`exports.inject = ["slots"]` 丢会让入口停在 loading。
+
+0.3.2 已经删掉了 `lib/index.js` 与 `lib/client.js` 的 default，唯独漏了真正被
+`main` 指向的那一个。
+
+**修复**
+
+- `lib/entry.js`：删掉 `export default apply`；`name` / `inject` 改为优先取真实现
+  （`impl?.inject ?? 兜底`），避免两份声明漂移。
+- `test/exports.test.js`：新增两项 —— entry 包装层的 default/inject 断言，
+  以及**扫描 `lib/` 全部模块**禁止 `export default` / `exports.default =`。
+  这样以后新增文件也不可能再漏。
+
 ## 0.3.0
 
 改名 `@myremme/dsh-kb`（npm 上 `dsh-kb` 是别人的包），补上"可改、可查全、会过期"三件事。
