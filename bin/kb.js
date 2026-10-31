@@ -8,13 +8,12 @@
 
 import { parseArgs } from "node:util";
 import process from "node:process";
-import path from "node:path";
-import { openDb, upsertFact, reindex, defaultDbPath } from "../lib/store.js";
+import { openDb, upsertFact, updateFact, getFact, reindex, sweepStale, defaultDbPath } from "../lib/store.js";
 import { seg } from "../lib/segment.js";
 import { search, renderResults } from "../lib/search.js";
 import { ingest } from "../lib/ingest.js";
 import { digest, treeRows } from "../lib/digest.js";
-import { exportHtml } from "../lib/export.js";
+import { exportStatic } from "../lib/export.js";
 
 const C = {
 	dim: "\u001b[2m",
@@ -35,8 +34,10 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb stats                         健康度
   kb show <id>                     看一条卡全文
   kb forget <id>                   标记失效（不删）
+  kb update <id> [--body B] [--title T] [--path P] [--status S]  改原卡（id 不变，旧版进历史）
+  kb sweep [--days N]              把过期快照卡降级（默认 30 天）
   kb reindex                       重建全文索引
-  kb export [--out FILE]           导出静态 HTML（双击可看）
+  kb export [--out FILE] [--limit N]  导出单文件 HTML 快照（默认 $DSH_HOME/kb/preview.html）
 
 环境:
   DSH_HOME     默认 ~/.dsh
@@ -159,8 +160,45 @@ function cmdShow(argv) {
 	const id = argv[0];
 	if (!id) throw new Error("缺少 id");
 	const { db } = open();
-	const row = db.prepare("SELECT * FROM fact WHERE id=? OR id LIKE ?").get(id, `${id}%`);
-	console.log(row ? JSON.stringify(row, null, 1) : "not found");
+	const detail = getFact(db, id);
+	if (detail === undefined) {
+		console.log("not found");
+		return;
+	}
+	console.log(JSON.stringify(detail, null, 1));
+}
+
+function cmdUpdate(argv) {
+	const { values, positionals } = parseArgs({
+		args: argv,
+		allowPositionals: true,
+		options: {
+			id: { type: "string" },
+			title: { type: "string" },
+			body: { type: "string" },
+			path: { type: "string" },
+			kind: { type: "string" },
+			tags: { type: "string" },
+			status: { type: "string" },
+		},
+	});
+	const id = values.id ?? positionals[0];
+	if (!id) throw new Error("缺少 id");
+	const patch = {};
+	if (values.title !== undefined) patch.title = values.title;
+	if (values.body !== undefined) patch.body = values.body;
+	if (values.path !== undefined) patch.paths = values.path ? [values.path] : [];
+	if (values.kind !== undefined) patch.kind = values.kind;
+	if (values.status !== undefined) patch.status = values.status;
+	if (values.tags !== undefined) patch.tags = values.tags.split(",").map((t) => t.trim()).filter(Boolean);
+	const { db } = open();
+	console.log(JSON.stringify(updateFact(db, id, patch, seg)));
+}
+
+function cmdSweep(argv) {
+	const { values } = parseArgs({ args: argv, options: { days: { type: "string" } } });
+	const { db } = open();
+	console.log(JSON.stringify({ staled: sweepStale(db, { days: values.days ? Number(values.days) : undefined }) }));
 }
 
 function cmdForget(argv) {
@@ -169,6 +207,20 @@ function cmdForget(argv) {
 	const { db } = open();
 	const r = db.prepare("UPDATE fact SET status='superseded', updated_at=? WHERE id=? OR id LIKE ?").run(Date.now(), id, `${id}%`);
 	console.log(JSON.stringify({ updated: r.changes }));
+}
+
+function cmdExport(argv) {
+	const { values } = parseArgs({
+		args: argv,
+		options: { out: { type: "string" }, limit: { type: "string" } },
+	});
+	const { db, file } = open();
+	const result = exportStatic(db, {
+		out: values.out,
+		limit: values.limit ? Number(values.limit) : undefined,
+		dbPath: file,
+	});
+	console.log(JSON.stringify(result));
 }
 
 function main() {
@@ -214,19 +266,15 @@ function main() {
 			return cmdShow(rest);
 		case "forget":
 			return cmdForget(rest);
+		case "update":
+			return cmdUpdate(rest);
+		case "sweep":
+			return cmdSweep(rest);
 		case "reindex":
 			console.log("reindexed", reindex(db, seg));
 			return;
-		case "export": {
-			const { values } = parseArgs({
-				args: rest,
-				options: { out: { type: "string" }, "body-limit": { type: "string" } },
-			});
-			const out = values.out || path.join(path.dirname(defaultDbPath()), "preview.html");
-			const r = exportHtml(db, out, values["body-limit"] ? { bodyLimit: Number(values["body-limit"]) } : undefined);
-			console.log(JSON.stringify(r));
-			return;
-		}
+		case "export":
+			return cmdExport(rest);
 		default:
 			console.error(`unknown command: ${cmd}\n`);
 			console.log(HELP);

@@ -4,11 +4,18 @@
 # keeps the package installed while switching the tools off.
 #
 # dbPath 留空时落在 $DSH_HOME/kb/kb.db —— 与会话文件同域，迁移备份一起走。
+#
+# ui 关掉只停 /api/dsh-kb/*（面板随之打不开）；工具与系统提示不受影响。
+# 行 id 是设置命名空间（面板 id 也用它），name 才是模块名。
 - insert:
     - id: dsh-kb
-      name: dsh-kb
+      name: "@myremme/dsh-kb"
       config:
         enabled: true
         dbPath: ""
         maxResults: 6
         promptSection: true
+        ui: true
+        bootFacts: 6
+        ingestEveryMinutes: 0
+        staleDays: 30

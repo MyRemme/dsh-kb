@@ -1,4 +1,4 @@
-# dsh-kb
+# @myremme/dsh-kb
 
 **DeepSeek Harness 的本地长期记忆库。** 把每次会话里"想明白的事"沉淀成不可变的事实卡，让下一次会话不必从零开始。
 
@@ -21,25 +21,60 @@
 ## 装
 
 ```bash
-cd ~/.dsh/profiles/desktop
-pnpm add dsh-kb
+# 本机开发：先打包，再装进 profile（真实副本，不是软链）
+cd D:/Code/dsh-kb && pnpm pack --pack-destination dist
+cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-0.3.0.tgz"
+
+# 远端：按 git 地址装
+# pnpm add "https://codeload.github.com/MyRemme/dsh-kb/tar.gz/<commit>"
 ```
 
-插件自带 `cordis.patch.yml`，装完重启 dsh 生效。
+**别直接 `pnpm add dsh-kb`**：npm 上那个名字属于另一个项目（`Pidan-Q/dsh-knowledge`），装下来是别人的代码。
+
+**也别用 `pnpm add link:D:/Code/dsh-kb`**：软链的真实路径落在源码目录，那里没有 `node_modules`，`import "@deepseek-ai/schemastery"` 直接 `ERR_MODULE_NOT_FOUND`。表现是**插件整块不加载**——没有工具、没有 `/api/dsh-kb/*`、侧边栏也没有按钮，而 dsh 不把这个错误摊到界面上。装真实副本，才能沿 `profiles/desktop/node_modules` 向上解析到 peer。
+
+插件自带 `cordis.patch.yml`，把它列进 profile `package.json` 的 `dsh.profile.bundles` 即可装载；装完重启 dsh 生效。
+
+只改 `lib/` 时不必重新打包，覆盖进去即可（宿主半要重启，`client.js` 刷新页面）：
+
+```bash
+cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
+```
 
 ## 用
 
-界面两套：侧边栏「记忆」面板（树 / 搜索 / 图谱），以及 `npx dsh-kb export` 产出的单文件 HTML —— 后者双击就开，不依赖服务。
-
-给模型的五个工具：
+给模型的七个工具：
 
 | 工具 | 作用 |
 |---|---|
-| `kb_search` | 检索。用户说"之前 / 上次 / 我们说过 / 继续"时先调 |
-| `kb_add` | 写一条卡。一个可独立陈述的结论 = 一条卡 |
+| `kb_search` | 检索。支持 `kinds` / `since` / `session` / `entity` / `includeStale` 过滤 |
+| `kb_add` | 写一条卡。自动带上当前会话 id 与 cwd |
+| `kb_update` | 改原卡：**id 不变**，旧版本进历史 |
+| `kb_get` | 按 id 读全文 + 历史 + 关系 + 实体 |
 | `kb_tree` | 看骨架树：每枝多少卡、最近更新、代表卡标题 |
-| `kb_stats` | 健康度：卡数、类型分布、路径分布、边数 |
-| `kb_ingest` | 增量吸收本机会话（幂等，可反复跑） |
+| `kb_stats` | 健康度：卡数、类型、路径、边数、实体数、降级数 |
+| `kb_ingest` | 增量吸收 + 重算摘要 + 降级过期快照（幂等） |
+
+开场注入：每轮组装系统提示时现算最近 N 张卡（`bootFacts`，默认 6），所以上一轮写下的东西下一轮就在上下文里。
+
+浏览器里的侧边栏「记忆」面板（树 / 列表 / 详情 / 图谱，可新建、可标失效），数据来自十二个端点：
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/api/dsh-kb/stats` | 健康度 |
+| GET | `/api/dsh-kb/search?q=&k=&path=&all=` | 检索 |
+| GET | `/api/dsh-kb/tree?prefix=` | 骨架树 |
+| GET | `/api/dsh-kb/facts?limit=&offset=&kind=&status=&path=` | 卡列表 |
+| GET | `/api/dsh-kb/fact?id=` | 单卡正文 + 一跳关系 |
+| GET | `/api/dsh-kb/graph?path=&limit=` | 枝内卡与边 |
+| POST | `/api/dsh-kb/add` | 写卡（与 `kb_add` 同一条写路径） |
+| POST | `/api/dsh-kb/update` | 改原卡，id 不变 |
+| POST | `/api/dsh-kb/forget` | 标失效（只降级，不删） |
+| GET | `/api/dsh-kb/history?id=` | 历史版本 + 实体提及 |
+| POST | `/api/dsh-kb/ingest` | 增量吸收 + 重算摘要 |
+| POST | `/api/dsh-kb/sweep` | 手动降级过期快照卡 |
+
+端点只校验来源（同源或回环，非 GET 要求严格同源）：本机进程本来就能读 `kb.db`，加 cookie 认证挡不住谁。**若经 lan-pair 之类暴露到内网，必须先换成宿主会话凭证校验。**
 
 给人用的 CLI：
 
@@ -50,6 +85,9 @@ npx dsh-kb add --title "结论" --body "正文" --path topic/dsh --kind decision
 npx dsh-kb tree topic --summary
 npx dsh-kb stats
 npx dsh-kb forget f_0d06e6d4155a92      # 标记失效，不删
+npx dsh-kb update <id> --body "新正文"
+npx dsh-kb sweep --days 30
+npx dsh-kb export [--out FILE]          # 单文件 HTML 快照，默认 $DSH_HOME/kb/preview.html
 ```
 
 ## 三条设计红线
