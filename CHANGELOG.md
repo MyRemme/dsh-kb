@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.7.1
+
+三条用户报的问题，两条是真 bug，一条是体验欠账。
+
+**1. 模型还是不能选 —— 根因是 cordis 的访问规则**
+
+`/models` 和 `/distill` 双双 500。原因不是列不出来，是 `ctx.llm` 在 cordis 里
+**没声明 inject 就访问服务会直接抛**（`cannot get property "llm" without inject`）。
+本插件的 inject 只有 `tools`/`systemPrompt` —— 声明 `llm` 会让它在没有模型的宿主里
+干脆不激活，所以不能那么写。
+
+修法：
+- `readLlm(ctx)`：先 `ctx.get("llm")`（不抛），再退回属性访问并用 try 兜住。
+- `probeModels(llm)`：**形状自适应**。宿主没有稳定契约，不同版本可能是方法
+  `listProviders()`、属性 `llm.providers`、或者包了一层 `{providers}`；模型同理
+  （`listModels(id)` / `getModels(id)` / `entry.models` / `llm.models[id]`）。
+  全试一遍，**任何异常都不外抛**。
+- `/models` 兜底：列表失败也回 200 `{available:false}`，附 `debug` 探测轨迹，
+  绝不让面板整页报红。
+
+**2. 星图太简陋：没动画、点不动**
+
+- 每颗星加**透明命中区**（半径 max(8, r+6)）：星体本身只有 2–5px，直接点一多半点空。
+- 选中态画**脉冲光环**（`dkb-pulse`），一眼看出当前选的是谁。
+- 进入时逐颗淡入（`dkb-fade`），悬停放大并提亮。
+- 点星体 → 打开右侧详情抽屉（既有链路）。
+
+**3. 骨架树状图根本渲染不出来**
+
+`mode === "skeleton"` 时传的是 `facts: []`，而 `buildCanvas` 会**跳过没有卡的枝** ——
+于是零个块，整个视图空白。修法：布局永远按完整 facts 算，渲染时再按 mode 决定
+画卡片还是只画块框。
+
+**顺手修的 flaky 测试**
+
+`反灌：文件比库里新才覆盖` 偶发失败：刚写完的文件 `mtime` 与 `updated_at` 可能同毫秒，
+靠"谁晚"判定会在边界上抖成 `updated=1`。测试改成显式把文件时间推旧 60 秒。
+
+测试 125 → 127（`readLlm` 与 `probeModels` 两组，覆盖 cordis 抛错、五种宿主形状、全抛错）。
+
 ## 0.7.0
 
 三个用户直接报上来的问题，全部落实。前两个是真 bug，第三个是我把需求做丢了。

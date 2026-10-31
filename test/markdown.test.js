@@ -230,6 +230,10 @@ test("反灌：文件比库里新才覆盖，否则算 stale", (t) => {
 	assert.equal(idle.unchanged, 1);
 
 	// 库里改过而文件没动 -> stale（文件旧了，不回灌）
+	// 这里必须显式把文件时间推旧：刚写完的文件 mtime 与 updated_at 可能同毫秒，
+	// 靠"谁晚"判定会在毫秒边界上抖成 updated=1（实测偶发）。
+	const past = new Date(Date.now() - 60000);
+	utimesSync(path.join(dir, relPathFor({ id, title: "反灌", path: "topic/dsh" }).split("/").join(path.sep)), past, past);
 	updateFact(db, id, { body: "库里改成了新版本" }, seg);
 	const stale = importFromDir(db, dir);
 	assert.equal(stale.updated, 0);

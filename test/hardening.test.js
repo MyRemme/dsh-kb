@@ -150,3 +150,63 @@ test("frontlog 5 秒内同一条消息只落一次盘", async () => {
 	server.close();
 	db.close();
 });
+
+test("readLlm：cordis 里读 ctx.llm 会抛，必须走 ctx.get", async () => {
+	const { readLlm } = await import("../lib/model.js");
+
+	// 模拟 cordis：直接读缺失的服务会抛 "cannot get property … without inject"
+	const cordis = { get: () => undefined };
+	Object.defineProperty(cordis, "llm", {
+		get() {
+			throw new Error('cannot get property "llm" without inject');
+		},
+	});
+	assert.equal(readLlm(cordis), undefined, "cordis 的抛错不能漏出去（漏出去就是 /models 与 /distill 双双 500）");
+
+	// 宿主给了通道
+	const withLlm = { get: () => ({ stream: () => {} }) };
+	assert.equal(typeof readLlm(withLlm).stream, "function");
+
+	// 退化输入
+	assert.equal(readLlm(undefined), undefined);
+	assert.equal(readLlm(null), undefined);
+	assert.equal(readLlm({}), undefined);
+	assert.equal(readLlm({ llm: { stream: () => {} } }).stream !== undefined, true, "非 cordis 的普通对象照样能取到");
+});
+
+test("probeModels：吃下宿主几种不同的形状，且永不外抛", async () => {
+	const { probeModels } = await import("../lib/model.js");
+
+	// 1) 方法式：listProviders() + listModels(id)
+	const a = await probeModels({
+		listProviders: () => [{ id: "p1", name: "P1" }],
+		listModels: (id) => (id === "p1" ? [{ id: "m1", name: "M1" }] : []),
+	});
+	assert.equal(a.providers.length, 1);
+	assert.equal(a.providers[0].models[0].id, "m1");
+
+	// 2) 包了一层 {providers}，模型挂在 provider 对象上
+	const b = await probeModels({ listProviders: () => ({ providers: [{ id: "p2", models: [{ id: "m2" }] }] }) });
+	assert.equal(b.providers[0].models[0].id, "m2");
+
+	// 3) 属性式：providers 是字符串数组，models 是 id -> 数组 的映射
+	const c = await probeModels({ providers: ["p3"], models: { p3: ["m3"] } });
+	assert.equal(c.providers[0].id, "p3");
+	assert.equal(c.providers[0].models[0].id, "m3");
+
+	// 4) 没有服务
+	assert.equal((await probeModels(undefined)).providers.length, 0);
+	assert.equal((await probeModels(null)).providers.length, 0);
+
+	// 5) 宿主全抛错：绝不能漏到 /models 变成 500
+	const e = await probeModels({
+		listProviders() {
+			throw new Error("boom");
+		},
+		get providers() {
+			throw new Error("boom2");
+		},
+	});
+	assert.equal(e.providers.length, 0);
+	assert.ok(e.debug.length > 0, "探测轨迹要留下来，方便用户反馈时定位");
+});
