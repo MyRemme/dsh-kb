@@ -133,7 +133,7 @@ test("迁移：老库里'会话卡 → 卡'的 contains 边改名成 produces", 
 	assert.equal(fromSession.length, 1);
 	assert.equal(fromSession[0].rel, "produces", "会话发出的边应改名为 produces");
 	assert.ok(rels.some((r) => r.rel === "contains"), "真正的归属边要保留");
-	assert.equal(Number(reopened.db.prepare("PRAGMA user_version").get().user_version), 3);
+	assert.equal(Number(reopened.db.prepare("PRAGMA user_version").get().user_version), 5);
 });
 
 test("前端分组规则与后端 groupOfFact 完全一致（防两侧漂移）", async () => {

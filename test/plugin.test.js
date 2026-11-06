@@ -142,15 +142,15 @@ test("kb_tree 与 kb_stats 能读到刚写的数据", async () => {
 	ctx._dispose();
 });
 
-test("ui 默认开：向 webServer 注册二十一个端点，卸载时全部摘掉", () => {
+test("ui 默认开：向 webServer 注册二十二个端点，卸载时全部摘掉", () => {
 	const ctx = makeCtx();
 	const dir = mkdtempSync(path.join(tmpdir(), "dsh-kb-"));
 	plugin.apply(ctx, { dbPath: path.join(dir, "kb.db") });
 	assert.deepEqual(ctx._injected, [["webServer"]]);
-	assert.equal(ctx._routes.length, 21);
+	assert.equal(ctx._routes.length, 22);
 	assert.deepEqual(
 		ctx._routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "models", "reap", "search", "stats", "sweep", "tree", "unmirror", "update", "usage"].map((n) => `/api/dsh-kb/${n}`).sort(),
+		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "hub", "ingest", "link", "migrate", "mirror", "models", "reap", "search", "stats", "sweep", "tree", "unmirror", "update", "usage"].map((n) => `/api/dsh-kb/${n}`).sort(),
 	);
 	assert.ok(ctx._routes.every((r) => r.kind === "exact" && typeof r.handler === "function"));
 	ctx._dispose();
@@ -176,7 +176,7 @@ test("没有 ctx.inject 的宿主（老运行时）不影响加载", () => {
 	ctx._dispose();
 });
 
-test("客户端半：ModuleLoader 用包名注册，向两个 slot 各挂一次", async () => {
+test("客户端半：ModuleLoader 用包名注册，两个面板各占一个 sidebar 与一个 main", async () => {
 	const { readFileSync } = await import("node:fs");
 	const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
 	let registration;
@@ -211,19 +211,32 @@ test("客户端半：ModuleLoader 用包名注册，向两个 slot 各挂一次"
 		},
 	};
 	clientExports.apply({ slots });
-	assert.equal(registered.length, 2);
+	// 两个面板各注册两次（侧边栏图标 + main 页）：中枢 与 记忆。
+	assert.equal(registered.length, 4);
 
-	const panellist = registered.find((r) => r.options.name === "sidebar.panellist");
+	const panels = registered.filter((r) => r.options.name === "sidebar.panellist");
+	assert.equal(panels.length, 2, "侧边栏应该有两个入口：中枢 与 记忆");
+
+	const hubPanel = panels.find((r) => r.options.id === "dsh-hub");
+	assert.ok(hubPanel, "没注册「中枢」入口");
+	// 中枢排在记忆前面：它回答"整机现在什么样"，比"看某一张卡"更靠前。
+	assert.equal(hubPanel.options.order, 31);
+	assert.equal(hubPanel.options.label(), "中枢");
+	assert.equal(typeof hubPanel.Component, "function");
+
+	const panellist = panels.find((r) => r.options.id === "dsh-kb");
 	assert.ok(panellist, "没注册侧边栏图标");
-	assert.equal(panellist.options.id, "dsh-kb");
 	assert.equal(panellist.options.order, 32);
 	assert.equal(panellist.options.label(), "记忆");
 	assert.equal(typeof panellist.Component, "function");
 
-	const main = registered.find((r) => r.options.name === "main");
-	assert.ok(main, "没注册主面板");
-	assert.equal(main.options.key, "dsh-kb");
-	assert.equal(typeof main.Component, "function");
+	const mains = registered.filter((r) => r.options.name === "main");
+	assert.deepEqual(
+		mains.map((r) => r.options.key).sort(),
+		["dsh-hub", "dsh-kb"],
+		"两个面板必须各有自己的 main 条目，否则点侧边栏换不动页",
+	);
+	for (const main of mains) assert.equal(typeof main.Component, "function");
 });
 
 test("package.json 声明了 dsh.client 且 exports 暴露 ./client", async () => {

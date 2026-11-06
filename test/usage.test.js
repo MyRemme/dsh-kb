@@ -98,8 +98,8 @@ test("边界输入：不存在的卡、非法 kind，都不记也不抛", () => 
 	assert.equal(recordUsage(db, id, "DROP TABLE"), false);
 	assert.equal(recordUsage(db, id, ""), false);
 	assert.equal(recordUsage(db, null, "hit"), false);
-	// 只有合法的三种
-	assert.deepEqual([...USAGE_KINDS].sort(), ["adopt", "hit", "reject"]);
+	// 阅读与引用独立于明确反馈
+	assert.deepEqual([...USAGE_KINDS].sort(), ["adopt", "cite", "hit", "open", "reject"]);
 	assert.equal(Number(rowOf(id).hit_count), 0, "非法调用不该留下痕迹");
 });
 

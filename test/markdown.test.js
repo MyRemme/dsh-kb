@@ -101,8 +101,8 @@ test("slugify 去掉方括号等会被通配符当模式的字符", () => {
 test("relPathFor 用骨架路径做目录，空路径落 inbox", () => {
 	assert.equal(relPathFor({ id: "f_abcdef123456", title: "标题", path: "topic/dsh" }), "topic/dsh/标题--abcdef12.md");
 	assert.equal(relPathFor({ id: "f_abcdef123456", title: "标题", path: "" }), "inbox/标题--abcdef12.md");
-	// 路径段里的非法字符被清掉，但不能把层级拆坏
-	assert.equal(relPathFor({ id: "f_abcdef123456", title: "t", path: "topic/a:b" }), "topic/ab/t--abcdef12.md");
+	// 非法路径必须拒绝；不能把不同路径静默清洗为同一目录
+	assert.throws(() => relPathFor({ id: "f_abcdef123456", title: "x", path: "topic/a:b" }), /Invalid knowledge path/);
 });
 
 test("frontmatter 能原样往返：引号、逗号、中文、数组、数字", () => {
@@ -217,7 +217,7 @@ test("dry-run 不写盘", (t) => {
 	assert.equal(existsSync(dir), false, "dry-run 不该建目录");
 });
 
-test("反灌：文件比库里新才覆盖，否则算 stale", (t) => {
+test("反灌：基线冲突不覆盖，重新导出后可编辑", (t) => {
 	const { db, dir } = makeDb(t);
 	upsertFact(db, { title: "反灌", body: "库里正文", path: "topic/dsh", kind: "fact" }, seg);
 	const id = idOf(db, "反灌");
@@ -239,11 +239,16 @@ test("反灌：文件比库里新才覆盖，否则算 stale", (t) => {
 	assert.equal(stale.updated, 0);
 	assert.ok(stale.stale >= 1, "文件比库里旧，不能覆盖库");
 
-	// 手改正文并把 mtime 推到未来 -> 覆盖
+	// 旧基线即使手改且时间更新，也必须报告冲突
 	writeFileSync(file, readFileSync(file, "utf8").replace("库里正文", "人手改过"), "utf8");
 	touchFuture(file);
-	const applied = importFromDir(db, dir);
-	assert.equal(applied.updated, 1);
+	const conflict = importFromDir(db, dir);
+    assert.equal(conflict.updated, 0);
+    assert.equal(conflict.conflicts.length, 1);
+    mirrorToDir(db, dir);
+    writeFileSync(file, readFileSync(file, 'utf8').replace('库里改成了新版本','人手改过'));
+    const applied = importFromDir(db, dir);
+    assert.equal(applied.updated, 1);
 	const row = db.prepare("SELECT body FROM fact WHERE id=?").get(id);
 	assert.equal(row.body, "人手改过");
 });

@@ -64,7 +64,7 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb export --md --dir D [--limit N] [--dry]
                                    投影成 Markdown 目录树（可 git、可手改、可 diff）
   kb import --md --dir D [--force] [--dry]
-                                   把目录树的改动写回库（默认只认比库里新的文件）
+                                   把目录树的改动写回库（默认检查导出基线，冲突不覆盖）
 
 关系名白名单:
   ${REL_KINDS.join(" / ")}
@@ -267,8 +267,9 @@ function cmdForget(argv) {
 	const id = argv[0];
 	if (!id) throw new Error("缺少 id");
 	const { db } = open();
-	const r = db.prepare("UPDATE fact SET status='superseded', updated_at=? WHERE id=? OR id LIKE ?").run(Date.now(), id, `${id}%`);
-	console.log(JSON.stringify({ updated: r.changes }));
+	const r = updateFact(db,id,{status:'superseded'});
+	if (r.result === 'not-found') throw new Error('卡不存在或 id 前缀不唯一');
+	console.log(JSON.stringify({ updated:r.result === 'updated' ? 1 : 0, id:r.id, version:r.version }));
 }
 
 function cmdLink(argv) {

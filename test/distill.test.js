@@ -61,42 +61,30 @@ test("buildPrompt 把原料与规则都写进去", () => {
 	assert.match(prompt.system, /不许编造/);
 	assert.match(prompt.system, /一条卡只讲一个事实/);
 	assert.match(prompt.system, /JSON 数组/);
-	assert.match(prompt.user, /#1 \[/);
+	assert.match(prompt.user, /chunkId/);
 	assert.match(prompt.user, /最多 8 条/);
 });
 
-test("parseCards 容忍围栏与前后废话，挡住脏数据", () => {
-	const raw = [
-		"好的，下面是提炼结果：",
-		"```json",
-		JSON.stringify([
-			{ title: "结论一", body: "正文一", kind: "fix", path: "topic/dsh" },
-			{ title: "", body: "缺标题" },
-			{ title: "结论二", body: "正文二", kind: "nonsense" },
-		]),
-		"```",
-		"以上。",
-	].join("\n");
-	const cards = parseCards(raw);
-	assert.equal(cards.length, 2, "缺标题的那条应被丢掉");
-	assert.equal(cards[0].kind, "fix");
-	assert.equal(cards[1].kind, "fact", "非法 kind 应回落 fact");
+test("parseCards 接受带逐条来源的围栏 JSON，拒绝不完整卡", () => {
+    const card = {title:'结论',body:'正文',kind:'fix',sourceIds:['f_abc'],evidence:[{id:'f_abc',quote:'依据'}]};
+    assert.equal(parseCards('```json\n'+JSON.stringify([card])+'\n```').length,1);
+    assert.throws(()=>parseCards(JSON.stringify([{...card,sourceIds:undefined}])));
 });
-
-test("parseCards 对非 JSON 返回空数组，不抛", () => {
-	assert.deepEqual(parseCards("模型今天不想输出"), []);
-	assert.deepEqual(parseCards(""), []);
-	assert.deepEqual(parseCards("[not json"), []);
+test("parseCards 区分非 JSON 与合法空结果", () => {
+    assert.deepEqual(parseCards('[]'),[]);
+    for (const text of ['模型今天不想输出','','[not json']) assert.throws(()=>parseCards(text),/JSON/);
 });
 
 test("saveDistilled 落库并建 derived_from 边指回原料", () => {
 	const sources = collectMaterial(db, { limit: 2 }).map((m) => m.id);
 	const cards = [{ title: "提炼出的结论 A", body: "根因与边界都写清楚。", kind: "decision", path: "topic/dsh" }];
+	cards[0].sourceIds = sources;
+	cards[0].evidence = sources.map(id => ({id,quote:db.prepare("SELECT body FROM fact WHERE id=?").get(id).body}));
 	const result = saveDistilled(db, cards, { sourceIds: sources, path: "topic/dsh" });
 	assert.equal(result.added, 1);
 	const row = db.prepare("SELECT id, source_kind, confidence FROM fact WHERE title=?").get("提炼出的结论 A");
 	assert.equal(row.source_kind, "distill");
-	assert.ok(Number(row.confidence) >= 0.8);
+	assert.equal(Number(row.confidence), 0.6);
 	const edges = db.prepare("SELECT dst, rel FROM edge WHERE src=?").all(row.id);
 	assert.equal(edges.length, sources.length);
 	assert.ok(edges.every((e) => e.rel === "derived_from"));
@@ -106,8 +94,10 @@ test("distillWithModel 走通：假模型吐 JSON，落库计数正确", async (
 	const fake = {
 		provider: "fake",
 		model: "fake-1",
-		async complete() {
-			return JSON.stringify([{ title: "假模型提炼出的结论", body: "正文自包含。", kind: "howto", path: "topic/dsh" }]);
+		async complete(prompt) {
+            const material = JSON.parse(prompt.user.slice(prompt.user.indexOf("\n")+1));
+            const m = material[0];
+			return JSON.stringify({cards:[{ title: "假模型提炼出的结论", body: "正文自包含。", kind: "howto", path:m.path,sourceIds:[m.id],evidence:[{id:m.id,quote:m.excerpt}] }],processed:[m.chunkId]});
 		},
 	};
 	const result = await distillWithModel(db, fake, { limit: 3 });
@@ -134,7 +124,7 @@ test("exportMaterial：无模型通道时的出料包", () => {
 	assert.match(pack.prompt.user, /原料/);
 });
 
-test("collectMaterial 默认排除已提炼过的原料（derived_from 的 dst）", () => {
+test("单条 derived_from 不表示整份原料已处理", () => {
 	seed();
 	const target = db.prepare("SELECT id FROM fact WHERE title=?").get("[意图] 修面板");
 	assert.ok(target, "seed 应该建出这张原料卡");
@@ -142,7 +132,7 @@ test("collectMaterial 默认排除已提炼过的原料（derived_from 的 dst�
 	addEdge(db, consumer.id, target.id, "derived_from", 1, "测试用");
 
 	const fresh = collectMaterial(db, { limit: 50 }).map((m) => m.title);
-	assert.ok(!fresh.includes("[意图] 修面板"), "被 derived_from 指向的原料不该再出");
+	assert.ok(fresh.includes("[意图] 修面板"), "引用边不能代替处理进度");
 
 	const all = collectMaterial(db, { limit: 50, includeSpent: true }).map((m) => m.title);
 	assert.ok(all.includes("[意图] 修面板"), "includeSpent 时才回来");

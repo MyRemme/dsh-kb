@@ -91,7 +91,7 @@ function raw(pathname, options = {}) {
 }
 
 test("路由表与端点清单一一对应", () => {
-	assert.equal(api.routes.length, 21);
+	assert.equal(api.routes.length, 22);
 	const declared = new Set(ENDPOINTS.map(([method, p]) => `${method} ${p}`));
 	for (const r of api.routes) {
 		const methods = [...declared].filter((entry) => entry.endsWith(` ${r.path}`));
@@ -99,7 +99,7 @@ test("路由表与端点清单一一对应", () => {
 	}
 	assert.deepEqual(
 		api.routes.map((r) => r.path).sort(),
-		["add", "distill", "fact", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "models", "reap", "search", "stats", "sweep", "tree", "unmirror", "update", "usage"].map((n) => `${API_PREFIX}/${n}`).sort(),
+		["add", "distill", "fact", "hub", "facts", "forget", "frontlog", "graph", "history", "ingest", "link", "migrate", "mirror", "models", "reap", "search", "stats", "sweep", "tree", "unmirror", "update", "usage"].map((n) => `${API_PREFIX}/${n}`).sort(),
 	);
 });
 
@@ -110,6 +110,37 @@ test("GET /stats 返回真实计数", async () => {
 	assert.equal(body.data.db, file);
 	assert.equal(typeof body.data.facts, "number");
 	assert.deepEqual(Object.keys(body.data).sort(), ["active", "db", "edges", "facts", "groups", "kinds", "mentions", "nodes", "paths", "rels", "sessions", "stale", "versions"].sort());
+});
+
+test("GET /hub 一次返回六块，且自检能区分「读不到」和「空库」", async () => {
+	const { status, body } = await get(`${API_PREFIX}/hub`);
+	assert.equal(status, 200);
+	assert.equal(body.ok, true);
+	const hub = body.data;
+
+	// 一个请求返回六块：缺任何一块，前端那一格就是永久转圈。
+	assert.deepEqual(Object.keys(hub).sort(), ["memory", "sessions", "status", "tools", "ts"]);
+	for (const key of ["facts", "active", "stale", "edges", "kinds", "paths", "branches", "mirror"]) {
+		assert.ok(hub.memory[key] !== undefined, `memory.${key} 缺字段`);
+	}
+	for (const key of ["total", "active", "ingested", "failed", "recent", "disk"]) {
+		assert.ok(hub.sessions[key] !== undefined, `sessions.${key} 缺字段`);
+	}
+	assert.ok(Array.isArray(hub.tools.groups));
+	assert.ok(Number.isInteger(hub.tools.count));
+	assert.ok(Array.isArray(hub.status.checks) && hub.status.checks.length > 0);
+	assert.equal(typeof hub.status.db.file, "string");
+	// 这个库是能读的，所以库检查必须是 ok —— 它报 bad 的另一面才是真正的缺陷：
+	// 文件存在但一条查询都跑不出来时，这一项以前照样是绿灯。
+	assert.equal(hub.status.checks.find((c) => c.key === "db").level, "ok");
+	// 会话目录 / 投影目录 / front.log 都指在临时目录，缺了也得降级而不是抛。
+	assert.equal(hub.sessions.disk.files, 0);
+	assert.equal(hub.status.frontLog.count, 0);
+});
+
+test("POST /hub → 405：只读聚合不接写", async () => {
+	const { status } = await post(`${API_PREFIX}/hub`, {});
+	assert.equal(status, 405);
 });
 
 test("POST /add 写卡，GET /facts 立刻能看到", async () => {

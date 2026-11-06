@@ -6,3 +6,8 @@ dist/
 .DS_Store
 *.log
 docs/canvas.html
+test-results/
+docs/hub.html
+docs/hub.png
+docs/hub-dark.html
+docs/hub-dark.png

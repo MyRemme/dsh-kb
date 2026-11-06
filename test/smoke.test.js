@@ -40,18 +40,18 @@ test("同一内容写入两次只留一张卡", () => {
 	assert.equal(db.prepare("SELECT COUNT(*) AS n FROM fact").get().n, 1);
 });
 
-test("正文显著变长时更新而不是新增", () => {
+test("同标题不同正文不隐式覆盖，补充必须显式修订", () => {
 	const db = fresh();
 	const f = { title: "结论 B", body: "短" };
 	upsertFact(db, f, seg);
 	const longer = { ...f, body: "短".padEnd(400, "补充内容") };
-	assert.equal(upsertFact(db, longer, seg), "updated");
-	assert.equal(db.prepare("SELECT COUNT(*) AS n FROM fact").get().n, 1);
+	assert.equal(upsertFact(db, longer, seg), "added");
+	assert.equal(db.prepare("SELECT COUNT(*) AS n FROM fact").get().n, 2);
 });
 
 test("id 稳定：同内容同 id", () => {
 	assert.equal(makeId("a", "b"), makeId("a", "b"));
-	assert.equal(factHash("A  B", "x").length, 40);
+	assert.equal(factHash("A  B", "x").length, 64);
 });
 
 test("中文双字词可被检索到（trigram 做不到）", () => {
