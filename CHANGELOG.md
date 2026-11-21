@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2
+
+**2026-11-17 宿主契约、鉴权与前后端闭环修复**
+
+- 修复 `sourceOf(exec)` 对齐 DSH 宿主真实 `agent.session.id` / `agent.session.header.cwd`（及 `systemPrompt` 上下文 `context.scope`），恢复工具写入归因、`usage_once` 会话去重与工作区作用域隔离；开场注入 `boot` 优先排在结论卡之前而不被新流水账挤占。
+- 修复 `resolveModel` 对齐 DSH `LlmRuntime` 契约：`messages[0].content` 使用块数组 `[{ type: "text", text }]`，兼容对象形态 `finish.reason.kind` 失败/截断判定，通过 `resolveModelInfo` 自动请求最低 `reasoningEffort` 并放大输出上限至 `8192`。
+- 为所有 `/api/dsh-kb/*` 路由接入宿主 `connection.admit` / `requestRejection` 门禁（异常 fail-closed 拒掉，未挂载时回退 `originAllowed`），堵住 `lan-pair` 内网开启时的无鉴权接口暴露。
+- 修复 Web UI 与服务端多处契约裂缝：`routes.js` `KINDS` 补齐 `todo`/`state`/`artifact`；`/search` 与 `buildSearchQuery` 支持 `group` 下推；`/graph` 支持 `q`/`kind`/`since`/`status` 筛选；`DetailDrawer` 接入「有用 / 没用」反馈、在线编辑/恢复与「来源对话」点击跳转；修复图谱/星图非被动 `wheel` 缩放、拖拽状态卡住与误触点选。
+- 细节加固：`terms()` 改用逐字滑窗并支持纯数字词元；`openDb` 加 `PRAGMA busy_timeout=5000`；`listSessionFiles` 按数字版本号比较；`kb_reap` / `kb_update` / `POST /update` / `POST /forget` 同步刷新枝摘要；延迟求值自定义 `dbPath` 下的 `frontLog`/`mirrorDir`。
+- 测试通过 **238 / 238**（新增 9 项回归测试）。
+
 ## 0.9.1
 
 **2026-11-06 连续流程修复（Git 源码版本；未发布 npm 包）**

@@ -4,7 +4,7 @@
 
 零外部依赖：只用 `node:sqlite` 和 `node:zlib`。整个库是一个 SQLite 文件，随你备份、迁移、用 `sqlite3` 直接打开看。
 
-当前源码 **0.9.1 / schema v5**：重扫保护人工修订和失效状态；不同会话的可变原料不再合并；镜像连续导入会确认新基线；提炼详情显示引用版本及原文。229 项隔离测试通过，尚未安装到实际宿主或迁移真实库。详见 [最新修复记录](docs/FIXES-20261106.md)。
+当前源码 **0.9.2 / schema v5**：重扫保护人工修订和失效状态；不同会话的可变原料不再合并；镜像连续导入会确认新基线；提炼详情显示引用版本及原文；已对齐 DSH 正式宿主会话/LLM/鉴权契约。238 项隔离测试通过。详见 [CHANGELOG](CHANGELOG.md)。
 
 ```
                fact 账本（唯一真相）
@@ -25,7 +25,7 @@
 ```bash
 # 本机开发：先打包，再装进 profile（真实副本，不是软链）
 cd D:/Code/dsh-kb && pnpm pack --pack-destination dist
-cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-0.3.0.tgz"
+cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-0.9.2.tgz"
 
 # 远端：按 git 地址装
 # pnpm add "https://codeload.github.com/MyRemme/dsh-kb/tar.gz/<commit>"
@@ -40,16 +40,16 @@ cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-
 只改 `lib/` 时不必重新打包，覆盖进去即可（宿主半要重启，`client.js` 刷新页面）：
 
 ```bash
-cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
+cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/@myremme/dsh-kb/lib/
 ```
 
 ## 用
 
-给模型的十个工具：
+给模型的十二个工具：
 
 | 工具 | 作用 |
 |---|---|
-| `kb_search` | 检索。支持 `kinds` / `since` / `session` / `entity` / `includeStale` 过滤 |
+| `kb_search` | 检索。支持 `kinds` / `since` / `session` / `entity` / `includeStale` / `allScopes` 过滤 |
 | `kb_add` | 写一条卡。自动带上当前会话 id 与 cwd |
 | `kb_update` | 改原卡：**id 不变**，旧版本进历史 |
 | `kb_get` | 按 id 读全文 + 历史 + 关系 + 实体 |
@@ -59,10 +59,12 @@ cp -r D:/Code/dsh-kb/lib/. ~/.dsh/profiles/desktop/node_modules/dsh-kb/lib/
 | `kb_distill` | 模型提炼：原料 → 结论卡（带 `derived_from` 边）；无模型通道时退回出料 |
 | `kb_mirror` | 投影成 Markdown 目录树（可 git / 可手改），或把目录改动写回库 |
 | `kb_link` | 给两张卡建一条语义关系边（关系名走白名单，拼错会被拒） |
+| `kb_reap` | 动态遗忘：按重要度 × 时间衰减把过时流水账降级（不物理删除） |
+| `kb_usage` | 查看命中/采纳/否决统计，或显式标记有用/没用 |
 
 开场注入：每轮组装系统提示时现算最近 N 张卡（`bootFacts`，默认 6），所以上一轮写下的东西下一轮就在上下文里。
 
-浏览器里的侧边栏「记忆」面板，数据来自十七个端点：
+浏览器里的侧边栏「中枢 / 记忆」面板，数据来自二十二个端点：
 
 **界面**（0.5.0 重排）
 

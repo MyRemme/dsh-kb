@@ -7,7 +7,7 @@
 
 零外部依赖：只用 `node:sqlite` 和 `node:zlib`。库是一个 SQLite 文件，随你备份、迁移、直接 `sqlite3` 打开看。
 
-当前源码版本 **0.9.1**，包含前轮完整性修复及复审 R01–R10 的连续流程修复。**229 项隔离测试通过**；修复行为、schema v5 迁移和兼容性见 [最新修复记录](docs/FIXES-20261106.md)。实际宿主安装与真实库迁移尚未执行。
+当前源码版本 **0.9.2**，包含前轮完整性修复、复审 R01–R10 及宿主契约/鉴权/交互修复。**238 项隔离测试通过**；修复行为见 [CHANGELOG](CHANGELOG.md)。
 
 结论按**作用域 + 完整标题和正文的 SHA-256**精确去重；可变 session/compaction 原料按来源独立绑定，提炼结论与原料不共用身份。同标题不同内容保留独立卡，需要补充时用 `kb_update`，保留 id 和旧版本。重扫按来源基线合并更新，不恢复人工设置的失效状态，正文冲突保留人工版本并报告。`kb_add` 默认使用会话工作目录，通用记忆显式设 `scope=global`；工具检索和开场提示默认只取当前目录作用域及 global，跨范围检索用 `allScopes=true`。没有 cwd 的旧卡按项目标签归作用域，无法判定项目的归 global；面板和 CLI 仍可浏览全库。
 
@@ -48,9 +48,9 @@ Markdown 格式 2 用导出 `base` 检查冲突；导入成功后确认文件的
 ## 安装
 
 ```bash
-# 在 dsh profile 目录
+# 在 dsh profile 目录（勿直接装无 scope 的 dsh-kb，那是另一个包）
 cd ~/.dsh/profiles/desktop
-pnpm add dsh-kb
+pnpm add "https://codeload.github.com/MyRemme/dsh-kb/tar.gz/main"
 ```
 
 插件自带 `cordis.patch.yml`，装完重启 dsh 即生效。也可以手动插入：
