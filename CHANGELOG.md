@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.3
+
+**2026-11-21 真实库死锁解耦、多归属路径保护与前后端闭环加固**
+
+- 修复旧版 6000 字符截断卡（`…[truncated]`）在 schema v5 `NULL` 基线下触发 `source-baseline-missing` 永久重扫死锁；新增 `backfillBaselines` 与 `backfillToolProvenance`（接入 `POST /migrate` 与 `kb migrate`），支持补齐未人工分叉的 `NULL` 基线及历史 `kb_add` 缺失的 `session_id`/`cwd`/`scope`。
+- 修复 `updateFact` / `POST /update` / `kb_update` / `kb update` 及前端 `DetailDrawer` 在线编辑传单值 `path` 时静默抹掉多归属副路径（`paths`）的缺陷。
+- 修复 `DetailDrawer` 点击「来源对话」在 `episode` 卡自身上原地自跳的死锁，支持从任意卡直达会话卡或筛选同会话全部卡片；补齐 `GET /graph` 与 `buildGraphQuery` 的 `session` 筛选。
+- 解耦状态/标签变更与内容版本：`collectMaterial` 按 `(source_id, source_hash)` 查询提炼进度，`withEvidence` 按内容哈希判定来源正文是否变更。
+- 修复 `POST /distill` 业务与模型异常裸抛 `500` 的问题（改为可读 `422`）；`importFromDir` 与 CLI 写命令统一刷新节点摘要；`/usage` 补全 `405` 校验与面板同版本去重；`/link` 支持短前缀并记录 `cite`；`kb_ingest` 与定时任务对齐保守 `reap`。
+- 细节修复：`search` 精排 `pscore` 识别副路径并遵守 `/` 边界；`entity`/`session`/`resolveFact` 改用字面量匹配防 `%`/`_` 通配符误命中；`export.js` 补齐 `todo`/`state`/`artifact` 类型映射及父节点子树前缀过滤；补全 `README.zh.md` 22 个端点文档。
+- 测试通过 **245 / 245**（新增 7 项回归测试）。
+
 ## 0.9.2
 
 **2026-11-17 宿主契约、鉴权与前后端闭环修复**

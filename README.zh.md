@@ -4,7 +4,7 @@
 
 零外部依赖：只用 `node:sqlite` 和 `node:zlib`。整个库是一个 SQLite 文件，随你备份、迁移、用 `sqlite3` 直接打开看。
 
-当前源码 **0.9.2 / schema v5**：重扫保护人工修订和失效状态；不同会话的可变原料不再合并；镜像连续导入会确认新基线；提炼详情显示引用版本及原文；已对齐 DSH 正式宿主会话/LLM/鉴权契约。238 项隔离测试通过。详见 [CHANGELOG](CHANGELOG.md)。
+当前源码 **0.9.3 / schema v5**：重扫保护人工修订和失效状态，兼容旧版截断卡平滑升级基线；编辑单路径保留多归属副路径；镜像连续导入确认新基线并刷新摘要；提炼进度与状态变更解耦；已对齐 DSH 正式宿主会话/LLM/鉴权契约。245 项隔离测试通过。详见 [CHANGELOG](CHANGELOG.md)。
 
 ```
                fact 账本（唯一真相）
@@ -25,7 +25,7 @@
 ```bash
 # 本机开发：先打包，再装进 profile（真实副本，不是软链）
 cd D:/Code/dsh-kb && pnpm pack --pack-destination dist
-cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-0.9.2.tgz"
+cd ~/.dsh/profiles/desktop && pnpm add "file:D:/Code/dsh-kb/dist/myremme-dsh-kb-0.9.3.tgz"
 
 # 远端：按 git 地址装
 # pnpm add "https://codeload.github.com/MyRemme/dsh-kb/tar.gz/<commit>"
@@ -93,24 +93,29 @@ node tools/preview-canvas.mjs   # 用真库数据 + 同一份 CSS 渲染，headl
 | 方法 | 路径 | 作用 |
 |---|---|---|
 | GET | `/api/dsh-kb/stats` | 健康度 |
-| GET | `/api/dsh-kb/search?q=&k=&path=&all=` | 检索 |
+| GET | `/api/dsh-kb/hub` | 中枢一屏六块聚合（记忆/检索/星图/会话/工具/状态） |
+| GET | `/api/dsh-kb/search?q=&k=&path=&group=&session=&all=` | 检索 |
 | GET | `/api/dsh-kb/tree?prefix=` | 骨架树 |
-| GET | `/api/dsh-kb/facts?limit=&offset=&kind=&status=&path=` | 卡列表 |
-| GET | `/api/dsh-kb/fact?id=` | 单卡正文 + 一跳关系 |
-| GET | `/api/dsh-kb/graph?path=&limit=` | 枝内卡与边 |
+| GET | `/api/dsh-kb/facts?limit=&offset=&kind=&status=&path=&group=&session=` | 卡列表 |
+| GET | `/api/dsh-kb/fact?id=` | 单卡正文 + 一跳关系 + 引用证据 + 使用反馈 |
+| GET | `/api/dsh-kb/graph?path=&group=&q=&kind=&since=&status=&session=&limit=` | 枝/条件内卡与边 |
 | POST | `/api/dsh-kb/add` | 写卡（与 `kb_add` 同一条写路径） |
-| POST | `/api/dsh-kb/update` | 改原卡，id 不变 |
+| POST | `/api/dsh-kb/update` | 改原卡，id 不变（单改 `path` 保留副路径） |
 | POST | `/api/dsh-kb/forget` | 标失效（只降级，不删） |
 | GET | `/api/dsh-kb/history?id=` | 历史版本 + 实体提及 |
-| POST | `/api/dsh-kb/ingest` | 增量吸收 + 重算摘要 |
+| POST | `/api/dsh-kb/ingest` | 增量吸收 + 过期/保守遗忘 + 重算摘要 |
 | POST | `/api/dsh-kb/sweep` | 手动降级过期快照卡 |
+| POST | `/api/dsh-kb/reap` | 动态遗忘（按重要度 × 时间衰减降级） |
+| GET | `/api/dsh-kb/models` | 探测宿主可用模型 provider/model 清单 |
 | POST | `/api/dsh-kb/distill` | 模型提炼（无通道时返回原料 + 提示词） |
+| GET/POST | `/api/dsh-kb/usage` | 查看命中/采纳/否决统计，或显式标记有用/没用 |
 | POST | `/api/dsh-kb/mirror` | 投影成 Markdown 目录树（`dir` / `dryRun`） |
 | POST | `/api/dsh-kb/unmirror` | 把镜像里的改动写回库（`force` / `dryRun`） |
-| POST | `/api/dsh-kb/link` | 建一条语义关系边（关系名白名单） |
-| POST | `/api/dsh-kb/migrate` | 重算派生数据：分组回填 / 老边改名（幂等） |
+| POST | `/api/dsh-kb/link` | 建一条语义关系边（支持短前缀，关系名白名单） |
+| POST | `/api/dsh-kb/migrate` | 重算派生数据：分组/老边/NULL基线/工具归因回填（幂等） |
+| POST | `/api/dsh-kb/frontlog` | 前端异常节流上报（落盘 `front.log`） |
 
-端点只校验来源（同源或回环，非 GET 要求严格同源）：本机进程本来就能读 `kb.db`，加 cookie 认证挡不住谁。**若经 lan-pair 之类暴露到内网，必须先换成宿主会话凭证校验。**
+所有端点均接入宿主 `connection.admit` / `requestRejection` 连接鉴权门禁（服务异常时 fail-closed 返回 503），并叠加强制同源/回环来源校验（非 GET 要求严格同源）。
 
 给人用的 CLI：
 

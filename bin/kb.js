@@ -20,12 +20,13 @@ import {
 	defaultDbPath,
 	linkFacts,
 	backfillGroups,
+	backfillBaselines,
 	renameSessionEdges,
 	REL_KINDS,
 } from "../lib/store.js";
 import { seg } from "../lib/segment.js";
 import { search, renderResults } from "../lib/search.js";
-import { ingest } from "../lib/ingest.js";
+import { ingest, backfillToolProvenance } from "../lib/ingest.js";
 import { digest, treeRows } from "../lib/digest.js";
 import { exportStatic } from "../lib/export.js";
 import { exportMaterial } from "../lib/distill.js";
@@ -58,7 +59,7 @@ const HELP = `dsh-kb — 本机长期记忆库
   kb distill [--path P] [--limit N] 提炼出料：原料 + 提示词（无模型通道时给会话自己写）
   kb link --src ID --dst ID --rel R [--note N]
                                    建一条语义关系边（关系名白名单见下）
-  kb migrate [--scope all|groups|edges]  重算派生数据（幂等）
+  kb migrate [--scope all|groups|edges|baselines|provenance]  重算派生数据（幂等）
   kb reindex                       重建全文索引
   kb export [--out FILE] [--limit N]  导出单文件 HTML 快照（默认 $DSH_HOME/kb/preview.html）
   kb export --md --dir D [--limit N] [--dry]
@@ -144,6 +145,7 @@ function cmdAdd(argv) {
 		},
 		seg,
 	);
+	if (r === "added") digest(db);
 	console.log(JSON.stringify({ result: r }));
 }
 
@@ -201,12 +203,14 @@ function cmdUpdate(argv) {
 	const patch = {};
 	if (values.title !== undefined) patch.title = values.title;
 	if (values.body !== undefined) patch.body = values.body;
-	if (values.path !== undefined) patch.paths = values.path ? [values.path] : [];
+	if (values.path !== undefined) patch.path = values.path;
 	if (values.kind !== undefined) patch.kind = values.kind;
 	if (values.status !== undefined) patch.status = values.status;
 	if (values.tags !== undefined) patch.tags = values.tags.split(",").map((t) => t.trim()).filter(Boolean);
 	const { db } = open();
-	console.log(JSON.stringify(updateFact(db, id, patch, seg)));
+	const result = updateFact(db, id, patch, seg);
+	if (result.result === "updated") digest(db);
+	console.log(JSON.stringify(result));
 }
 
 function cmdDistill(argv) {
@@ -226,7 +230,9 @@ function cmdDistill(argv) {
 function cmdSweep(argv) {
 	const { values } = parseArgs({ args: argv, options: { days: { type: "string" } } });
 	const { db } = open();
-	console.log(JSON.stringify({ staled: sweepStale(db, { days: values.days ? Number(values.days) : undefined }) }));
+	const staled = sweepStale(db, { days: values.days ? Number(values.days) : undefined });
+	if (staled > 0) digest(db);
+	console.log(JSON.stringify({ staled }));
 }
 
 function cmdReap(argv) {
@@ -248,6 +254,7 @@ function cmdReap(argv) {
 		purgeThreshold: values["purge-threshold"] ? Number(values["purge-threshold"]) : undefined,
 		includeDoubtful: values["include-doubtful"] === true,
 	});
+	if (!dryRun && (result.demoted > 0 || result.superseded > 0)) digest(db);
 	if (values.json === true) {
 		console.log(JSON.stringify(result, null, 1));
 		return;
@@ -269,6 +276,7 @@ function cmdForget(argv) {
 	const { db } = open();
 	const r = updateFact(db,id,{status:'superseded'});
 	if (r.result === 'not-found') throw new Error('卡不存在或 id 前缀不唯一');
+	if (r.result === 'updated') digest(db);
 	console.log(JSON.stringify({ updated:r.result === 'updated' ? 1 : 0, id:r.id, version:r.version }));
 }
 
@@ -299,6 +307,8 @@ function cmdMigrate(argv) {
 	const result = { scope: values.scope };
 	if (values.scope === "all" || values.scope === "groups") result.groups = backfillGroups(db);
 	if (values.scope === "all" || values.scope === "edges") result.edges = renameSessionEdges(db);
+	if (values.scope === "all" || values.scope === "baselines") result.baselines = backfillBaselines(db);
+	if (values.scope === "all" || values.scope === "provenance") result.provenance = backfillToolProvenance(db);
 	console.log(JSON.stringify(result));
 }
 
