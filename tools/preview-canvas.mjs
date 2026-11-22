@@ -221,6 +221,7 @@ execFileSync(browser, [
 	"--disable-gpu",
 	"--hide-scrollbars",
 	"--force-device-scale-factor=1",
+	"--virtual-time-budget=1000",
 	"--window-size=1600,940",
 	`--screenshot=${OUT_PNG}`,
 	`file:///${OUT_HTML.replace(/\\/g, "/")}`,

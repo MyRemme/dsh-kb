@@ -70,17 +70,22 @@ const lines = layout.links
 		return `<line x1="${l.x1.toFixed(1)}" y1="${l.y1.toFixed(1)}" x2="${l.x2.toFixed(1)}" y2="${l.y2.toFixed(1)}" stroke="${stroke}" stroke-width="${w}" stroke-opacity="${op}"/>`;
 	})
 	.join("");
-const hubNodes = layout.hubs
+const orbits = [0.16, 0.28, 0.4]
+	.map((r) => `<circle class="dkb-orbit" cx="${SIZE / 2}" cy="${SIZE / 2}" r="${(SIZE * r).toFixed(1)}"/>`)
+	.join("");
+const hubDots = layout.hubs
+	.map((hub) => `<circle cx="${hub.x.toFixed(1)}" cy="${hub.y.toFixed(1)}" r="3.2" fill="#f7f8fa" stroke="#6a7178" stroke-width="1"/>`)
+	.join("");
+const hubLabels = layout.hubs
 	.map(
 		(hub) =>
-			`<circle cx="${hub.x.toFixed(1)}" cy="${hub.y.toFixed(1)}" r="3.2" fill="#f7f8fa" stroke="#6a7178" stroke-width="1"/>` +
 			`<text class="dkb-hublabel" x="${(hub.x + (Math.cos(hub.angle) >= 0 ? 7 : -7)).toFixed(1)}" y="${(hub.y + 3).toFixed(1)}" text-anchor="${Math.cos(hub.angle) >= 0 ? "start" : "end"}">${esc(hub.label)}${hub.count ? ` ${hub.count}` : ""}</text>`,
 	)
 	.join("");
 const starNodes = layout.stars
 	.map(
 		(star) =>
-			`<circle cx="${star.x.toFixed(1)}" cy="${star.y.toFixed(1)}" r="${star.r.toFixed(2)}" fill="${star.color}" fill-opacity="0.85"><title>${esc(star.title)}</title></circle>`,
+			`<circle class="dkb-star" cx="${star.x.toFixed(1)}" cy="${star.y.toFixed(1)}" r="${star.r.toFixed(2)}" fill="${star.color}" fill-opacity="0.88"><title>${esc(star.title)}</title></circle>`,
 	)
 	.join("");
 
@@ -91,8 +96,10 @@ const HTML = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><tit
   --dsw-alias-label-primary:#14171a; --dsw-alias-label-secondary:#454b52; --dsw-alias-label-tertiary:#6a7178;
   --dsw-alias-label-caption:#9aa1a8; --dsw-alias-label-primary-foreground:#ffffff;
   --dsw-alias-border-l1:#eef0f2; --dsw-alias-border-l2:#e5e8eb; --dsw-alias-border-l3:#d6dade; --dsw-alias-border-l4:#b6bcc3;
-  --dsw-alias-interactive-bg-hover:#f0f2f4; --dsw-alias-state-business-primary:#3b82f6;
-  --dsw-alias-state-business-tertiary:#9dbaf5; --dsw-alias-state-error-primary:#e5484d; --dsw-alias-button-primary-fill:#3b82f6;
+  --dsw-alias-interactive-bg-hover:#f0f2f4; --dsw-alias-brand-primary:#3b82f6; --dsw-alias-state-business-primary:#3b82f6;
+  --dsw-alias-state-business-tertiary:#9dbaf5; --dsw-alias-state-success-primary:#12a150; --dsw-alias-state-warn-primary:#d4a017;
+  --dsw-alias-state-warn-secondary:#eab308; --dsw-alias-state-error-primary:#e5484d; --dsw-alias-state-idle-primary:#0ea5e9;
+  --dsw-alias-button-primary-fill:#3b82f6;
   --dsw-radius-sm:6px; --dsw-radius-md:8px; --dsw-radius-lg:12px;
 }
 html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
@@ -117,7 +124,7 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
   <div class="dkb-stage">
     <div class="dkb-vp">
       <svg class="dkb-star-svg" viewBox="0 0 ${SIZE} ${SIZE}" preserveAspectRatio="xMidYMid meet">
-        <g>${lines}${hubNodes}${starNodes}</g>
+        <g>${orbits}${lines}${hubDots}${starNodes}${hubLabels}</g>
       </svg>
       <div class="dkb-toolbar">
         <button class="dkb-btn" data-active="0">卡片</button><button class="dkb-btn" data-active="1">星图</button><button class="dkb-btn" data-active="0">骨架</button>
@@ -137,5 +144,5 @@ if (browser === undefined) {
 	console.log("没找到 Edge/Chrome，HTML 已生成，可直接用浏览器打开");
 	process.exit(0);
 }
-execFileSync(browser, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1", "--window-size=1400,820", `--screenshot=${OUT_PNG}`, `file:///${OUT_HTML.replace(/\\/g, "/")}`], { stdio: "ignore" });
+execFileSync(browser, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1", "--virtual-time-budget=1000", "--window-size=1400,820", `--screenshot=${OUT_PNG}`, `file:///${OUT_HTML.replace(/\\/g, "/")}`], { stdio: "ignore" });
 console.log("wrote", OUT_PNG);

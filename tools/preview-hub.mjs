@@ -178,10 +178,12 @@ const hits = memory.paths.slice(0, 4).map((row, i) => {
 });
 
 const starSvg = `<svg class="dhub-star" viewBox="0 0 ${galaxy.w} ${galaxy.h}" preserveAspectRatio="xMidYMid meet">
+${[0.24, 0.42].map((r) => `<circle class="orbit" cx="${galaxy.cx}" cy="${galaxy.cy}" r="${Math.min(galaxy.w, galaxy.h) * r}"/>`).join("")}
 ${galaxy.edges.map((e) => `<line class="${e.faint ? "lnk faint" : "lnk"}" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}"/>`).join("")}
+<circle class="core-halo" cx="${galaxy.cx}" cy="${galaxy.cy}" r="6.5"/>
 <circle class="core" cx="${galaxy.cx}" cy="${galaxy.cy}" r="4.2"/>
+${galaxy.stars.map((s) => `<g style="color:${kindColor[s.kind] ?? "#3b82f6"}"><circle class="star-dot" cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${kindColor[s.kind] ?? "#3b82f6"}"><title>${esc(s.title)}</title></circle></g>`).join("")}
 ${galaxy.labels.map((l) => `<text x="${l.x}" y="${l.y}" text-anchor="${l.anchor}">${esc(l.text)} ${l.total !== undefined && l.total !== l.n ? `${l.n}/${l.total}` : l.n}</text>`).join("")}
-${galaxy.stars.map((s) => `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${kindColor[s.kind] ?? "#3b82f6"}"><title>${esc(s.title)}</title></circle>`).join("")}
 </svg>`;
 
 const HTML = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>dsh-kb 中枢基线</title>
@@ -252,7 +254,7 @@ html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Microsoft Y
     <section class="dhub-card">
       <header class="dhub-card-h"><span class="ico">◉</span><span class="t">状态</span><span class="x">kb ${status.version} · dsh ${status.dshVersion}</span></header>
       <div class="dhub-card-b">
-        ${status.checks.map((c) => `<div class="dhub-check"><span class="d" style="background:${levelColor[c.level]}"></span><span class="l">${esc(c.label)}</span><span class="v" title="${esc(c.value)}">${esc(c.value)}</span></div>`).join("")}
+        ${status.checks.map((c) => `<div class="dhub-check"><span class="d" style="color:${levelColor[c.level]};background:${levelColor[c.level]}"></span><span class="l">${esc(c.label)}</span><span class="v" title="${esc(c.value)}">${esc(c.value)}</span></div>`).join("")}
         <div class="dhub-empty" style="margin-top:8px">${status.node} · pid ${status.pid} · 已运行 ${Math.floor(status.uptimeSec / 60)} 分钟 · RSS ${status.rssMB} MB</div>
         <div class="dhub-mono" style="margin-top:6px">${esc(status.db.file)}</div>
       </div>
@@ -271,7 +273,7 @@ if (browser === undefined) {
 }
 execFileSync(
 	browser,
-	["--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1", "--window-size=1600,940", `--screenshot=${OUT_PNG}`, `file:///${OUT_HTML.replace(/\\/g, "/")}`],
+	["--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=1", "--virtual-time-budget=1000", "--window-size=1600,940", `--screenshot=${OUT_PNG}`, `file:///${OUT_HTML.replace(/\\/g, "/")}`],
 	{ stdio: "ignore" },
 );
 console.log("wrote", OUT_PNG);
